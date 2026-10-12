@@ -1,0 +1,39 @@
+{
+  "name": "crosshair-z",
+  "productName": "Crosshair Z",
+  "version": "1.5.1",
+  "description": "Custom crosshair overlay for games",
+  "main": "src/main/main.js",
+  "author": "Mario Olteanu",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/**/*.test.js\"",
+    "dist": "electron-builder --win portable",
+    "build:pack": "node scripts/build-default-pack.js"
+  },
+  "build": {
+    "appId": "com.crosshairz.app",
+    "directories": {
+      "output": "release"
+    },
+    "productName": "Crosshair Z",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "koffi": "^2.16.3"
+  }
+}

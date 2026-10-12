@@ -1,0 +1,178 @@
+[
+ {
+  "name": "Purple cross",
+  "code": "CZ2-W3siY29sb3IiOiIjODAwMDgwIiwib3BhY2l0eSI6MC43ODQsImxpbmVzIjp7Imxlbmd0aCI6NCwiZ2FwIjo4fSwib3V0bGluZSI6eyJlbmFibGVkIjpmYWxzZSwiY29sb3IiOiIjODAwMDgwIn0sImRvdCI6eyJzaXplIjo0LCJjb2xvciI6IiNjMWZmZmYiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfSwiZmlyaW5nIjp7ImVuYWJsZWQiOnRydWUsInNwcmVhZCI6OCwic3BlZWQiOjIwfX1d"
+ },
+ {
+  "name": "Cyan cross",
+  "code": "CZ2-W3siY29sb3IiOiIjMDBhNWZmIiwibGluZXMiOnsibGVuZ3RoIjozLCJnYXAiOjE4fSwib3V0bGluZSI6eyJlbmFibGVkIjpmYWxzZX0sImRvdCI6eyJzaXplIjo0LCJzaGFwZSI6ImNpcmNsZSIsImNvbG9yIjoiI2ZmMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Pink cross",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMGVhIiwibGluZXMiOnsibGVuZ3RoIjozLCJnYXAiOjB9LCJkb3QiOnsic2l6ZSI6NiwiY29sb3IiOiIjZDc0NTQ1IiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Black cross",
+  "code": "CZ2-W3siY29sb3IiOiIjMDAwMDAwIiwib3BhY2l0eSI6MC45LCJibHVyIjoyLCJsaW5lcyI6eyJnYXAiOjZ9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7InNpemUiOjYsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX0sImZpcmluZyI6eyJlbmFibGVkIjp0cnVlLCJzcHJlYWQiOjE5LCJzcGVlZCI6MjB9fSx7Im5hbWUiOiJMYXllciAxIGRvdCIsImNvbG9yIjoiIzAwMDAwMCIsImJsdXIiOjIsImxpbmVzIjp7ImVuYWJsZWQiOmZhbHNlLCJnYXAiOjZ9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNpemUiOjYsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX0sImZpcmluZyI6eyJlbmFibGVkIjp0cnVlLCJzcHJlYWQiOjE5LCJzcGVlZCI6MjB9fV0"
+ },
+ {
+  "name": "Green cross",
+  "code": "CZ2-W3siY29sb3IiOiIjMDBmZjMxIiwibGluZXMiOnsibGVuZ3RoIjoyLCJnYXAiOjR9LCJvdXRsaW5lIjp7ImNvbG9yIjoiIzBiMGIwYiJ9LCJkb3QiOnsic2l6ZSI6MSwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Black dot",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMDAwIiwib3BhY2l0eSI6MC4yNCwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJlbmFibGVkIjpmYWxzZSwibGVuZ3RoIjo1LCJ0aGlja25lc3MiOjEsImdhcCI6OH0sIm91dGxpbmUiOnsidGhpY2tuZXNzIjoyLCJjb2xvciI6IiNmZmZmZmYifSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNpemUiOjQsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjMDAwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "White cross",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsibGVuZ3RoIjo0LCJnYXAiOjJ9LCJvdXRsaW5lIjp7ImNvbG9yIjoiIzAwMDBmZiIsIm9wYWNpdHkiOjAuOH0sImRvdCI6eyJzaXplIjo0LCJzaGFwZSI6ImNpcmNsZSIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Blue cross with dot",
+  "code": "CZ2-W3siY29sb3IiOiIjMDAxNGZmIiwibGluZXMiOnsibGVuZ3RoIjoyLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "White cross 2",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwib3BhY2l0eSI6MC42NzUsImxpbmVzIjp7Imxlbmd0aCI6OCwidGhpY2tuZXNzIjo0LCJnYXAiOjh9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlfSwiZG90Ijp7InNpemUiOjgsImNvbG9yIjoiIzAwODA0MCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "White cross 3",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsibGVuZ3RoIjoxMCwidGhpY2tuZXNzIjo0LCJnYXAiOjR9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowLjg0M30sImRvdCI6eyJzaXplIjo4LCJjb2xvciI6IiMwMDgwNDAiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfX1d"
+ },
+ {
+  "name": "White X",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJnYXAiOjZ9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7InNpemUiOjEsImNvbG9yIjoiIzAwMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "White cross 4",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsibGVuZ3RoIjozLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJjb2xvciI6IiM4MDAwODAiLCJvcGFjaXR5IjowfSwiZG90Ijp7InNpemUiOjEsImNvbG9yIjoiI2MxZmZmZiIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "White X 2",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJsZW5ndGgiOjMsImdhcCI6Mn0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2V9LCJkb3QiOnsic2l6ZSI6MSwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Cyan X with dot",
+  "code": "CZ2-W3siY29sb3IiOiIjMDBlMmZmIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJsZW5ndGgiOjQsImdhcCI6MH0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2UsImNvbG9yIjoiI2I4MDYwNiIsIm9wYWNpdHkiOjB9LCJkb3QiOnsiZW5hYmxlZCI6dHJ1ZSwic2l6ZSI6NCwiY29sb3IiOiIjMDBlMmZmIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "White cross 5",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsiZ2FwIjowfSwib3V0bGluZSI6eyJlbmFibGVkIjpmYWxzZSwib3BhY2l0eSI6MC4yNH0sImRvdCI6eyJzaGFwZSI6ImNpcmNsZSIsInVzZU1haW5Db2xvciI6ZmFsc2V9fSx7Im5hbWUiOiJMYXllciAxIGRvdCIsImNvbG9yIjoiI2ZmZmZmZiIsIm9wYWNpdHkiOjAuNzIsImxpbmVzIjp7ImVuYWJsZWQiOmZhbHNlLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowLjMzM30sImRvdCI6eyJlbmFibGVkIjp0cnVlLCJzaGFwZSI6ImNpcmNsZSIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Green cross 2",
+  "code": "CZ2-W3siY29sb3IiOiIjMDRmZjE5IiwibGluZXMiOnsibGVuZ3RoIjozLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7InNpemUiOjEsImNvbG9yIjoiIzAwMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Cyan X",
+  "code": "CZ2-W3siY29sb3IiOiIjNDdlNmYwIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJsZW5ndGgiOjQsImdhcCI6NH0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2UsImNvbG9yIjoiIzU5M2ZmNiIsIm9wYWNpdHkiOjAuNzh9LCJkb3QiOnsic2l6ZSI6MTAsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjYmE2NDY0IiwidXNlTWFpbkNvbG9yIjpmYWxzZX0sImZpcmluZyI6eyJlbmFibGVkIjp0cnVlLCJzcHJlYWQiOjEsInNwZWVkIjoyMH19XQ"
+ },
+ {
+  "name": "Red cross with dot",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMDAwIiwibGluZXMiOnsibGVuZ3RoIjoyLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "White cross 6",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsibGVuZ3RoIjo0LCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJjb2xvciI6IiNmZmZmZmYiLCJvcGFjaXR5IjowfSwiZG90Ijp7InNoYXBlIjoiY2lyY2xlIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Green X",
+  "code": "CZ2-W3siY29sb3IiOiIjM2ZmZjAwIiwib3BhY2l0eSI6MC40NCwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJsZW5ndGgiOjMsImdhcCI6MH0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2UsImNvbG9yIjoiIzNmZmYwMCJ9LCJkb3QiOnsic2l6ZSI6MjAsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjM2ZmZjAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19LHsibmFtZSI6IkxheWVyIDEgZG90IiwiY29sb3IiOiIjM2ZmZjAwIiwib3BhY2l0eSI6MC4wMSwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJlbmFibGVkIjpmYWxzZSwibGVuZ3RoIjozLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJjb2xvciI6IiMzZmZmMDAifSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNpemUiOjIwLCJzaGFwZSI6ImNpcmNsZSIsImNvbG9yIjoiIzNmZmYwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Red cross",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMDAwIiwibGluZXMiOnsibGVuZ3RoIjo3LCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlfSwiZG90Ijp7InNpemUiOjEsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Red cross 2",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMDAwIiwibGluZXMiOnsibGVuZ3RoIjo4LCJnYXAiOjh9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlfSwiZG90Ijp7InNpemUiOjQsImNvbG9yIjoiI2ZmMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "White cross 7",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsibGVuZ3RoIjo0LCJnYXAiOjR9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJjb2xvciI6IiNmZmZmZmYiLCJvcGFjaXR5IjowfSwiZG90Ijp7InNpemUiOjEsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Pink cross 2",
+  "code": "CZ2-W3siY29sb3IiOiIjZTYwMGZmIiwibGluZXMiOnsibGVuZ3RoIjo1LCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJjb2xvciI6IiNmNTAwZmYiLCJvcGFjaXR5IjowfSwiZG90Ijp7InNpemUiOjEsImNvbG9yIjoiIzAwODBmZiIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "White cross 8",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsibGVuZ3RoIjoyLCJnYXAiOjR9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7InNpemUiOjEsImNvbG9yIjoiIzAwMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Red cross 3",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMDAwIiwibGluZXMiOnsibGVuZ3RoIjo1LCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJ0aGlja25lc3MiOjIsIm9wYWNpdHkiOjB9LCJkb3QiOnsic2l6ZSI6MTIsImNvbG9yIjoiIzAwMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Red dot",
+  "code": "CZ2-W3siY29sb3IiOiIjNzFmZjc0IiwibGluZXMiOnsiZW5hYmxlZCI6ZmFsc2UsImxlbmd0aCI6MCwidGhpY2tuZXNzIjoxLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNpemUiOjYsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Red cross 4",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMDAwIiwibGluZXMiOnsibGVuZ3RoIjo0LCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7ImNvbG9yIjoiI2ZmMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fSx7Im5hbWUiOiJMYXllciAxIGRvdCIsImNvbG9yIjoiI2ZmMDAwMCIsIm9wYWNpdHkiOjAuMDE2LCJsaW5lcyI6eyJlbmFibGVkIjpmYWxzZSwibGVuZ3RoIjo0LCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsImNvbG9yIjoiI2ZmMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "White dot",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsiZW5hYmxlZCI6ZmFsc2UsImxlbmd0aCI6MCwiZ2FwIjo0LCJ0b3AiOmZhbHNlfSwib3V0bGluZSI6eyJlbmFibGVkIjpmYWxzZSwib3BhY2l0eSI6MH0sImRvdCI6eyJlbmFibGVkIjp0cnVlLCJ1c2VNYWluQ29sb3IiOmZhbHNlfX1d"
+ },
+ {
+  "name": "Green cross 3",
+  "code": "CZ2-W3siY29sb3IiOiIjNzFmZjc0Iiwib3BhY2l0eSI6MC43NDEsImxpbmVzIjp7Imxlbmd0aCI6OCwidGhpY2tuZXNzIjo0LCJnYXAiOjh9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlfSwiZG90Ijp7InNpemUiOjQsImNvbG9yIjoiIzcxZmY3NCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fSx7Im5hbWUiOiJMYXllciAxIGRvdCIsImNvbG9yIjoiIzcxZmY3NCIsIm9wYWNpdHkiOjAuNzQ5LCJsaW5lcyI6eyJlbmFibGVkIjpmYWxzZSwibGVuZ3RoIjo4LCJ0aGlja25lc3MiOjQsImdhcCI6OH0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2V9LCJkb3QiOnsiZW5hYmxlZCI6dHJ1ZSwic2l6ZSI6NCwiY29sb3IiOiIjNzFmZjc0IiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Green cross 4",
+  "code": "CZ2-W3siY29sb3IiOiIjNTBmZjAwIiwibGluZXMiOnsibGVuZ3RoIjo0LCJnYXAiOjR9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlfSwiZG90Ijp7InNpemUiOjQsImNvbG9yIjoiI2ZmMDAwMCIsInVzZU1haW5Db2xvciI6ZmFsc2V9fV0"
+ },
+ {
+  "name": "Green X 2",
+  "code": "CZ2-W3siY29sb3IiOiIjMDBmZjIyIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJsZW5ndGgiOjcsImdhcCI6MH0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2UsInRoaWNrbmVzcyI6NiwiY29sb3IiOiIjOTcwYzU5Iiwib3BhY2l0eSI6MH0sImRvdCI6eyJzaXplIjoyMCwic2hhcGUiOiJjaXJjbGUiLCJjb2xvciI6IiMyNjBmN2IiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfSwiZmlyaW5nIjp7ImVuYWJsZWQiOnRydWUsInNwcmVhZCI6Miwic3BlZWQiOjIwfX1d"
+ },
+ {
+  "name": "White cross 9",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsibGVuZ3RoIjoyLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowfSwiZG90Ijp7InNpemUiOjIwLCJjb2xvciI6IiMwMDgwNDAiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfX1d"
+ },
+ {
+  "name": "Cyan X with dot 2",
+  "code": "CZ2-W3siY29sb3IiOiIjMDNmNWRiIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJsZW5ndGgiOjUsImdhcCI6NH0sIm91dGxpbmUiOnsiY29sb3IiOiIjNGU0NjQ2In0sImRvdCI6eyJlbmFibGVkIjp0cnVlLCJjb2xvciI6IiNkZTAwZmYiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfX1d"
+ },
+ {
+  "name": "Red dot 2",
+  "code": "CZ2-W3siY29sb3IiOiIjMDAwMDAwIiwibGluZXMiOnsiZW5hYmxlZCI6ZmFsc2UsImxlbmd0aCI6MCwidGhpY2tuZXNzIjoxLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlfSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZmYwNDA0IiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "White X 3",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJsZW5ndGgiOjUsImdhcCI6OH0sIm91dGxpbmUiOnsiY29sb3IiOiIjNzcwMGZmIn0sImRvdCI6eyJzaXplIjoxMiwic2hhcGUiOiJjaXJjbGUiLCJjb2xvciI6IiMwMDhiZmYiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfX1d"
+ },
+ {
+  "name": "Green cross 5",
+  "code": "CZ2-W3siY29sb3IiOiIjMzZmZjAwIiwib3BhY2l0eSI6MC42OCwibGluZXMiOnsibGVuZ3RoIjo0LCJ0aGlja25lc3MiOjQsImdhcCI6NH0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2UsIm9wYWNpdHkiOjAuMDE1fSwiZG90Ijp7InNpemUiOjQsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19LHsibmFtZSI6IkxheWVyIDEgZG90IiwiY29sb3IiOiIjMzZmZjAwIiwib3BhY2l0eSI6MC43LCJsaW5lcyI6eyJlbmFibGVkIjpmYWxzZSwibGVuZ3RoIjo0LCJ0aGlja25lc3MiOjQsImdhcCI6NH0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2UsIm9wYWNpdHkiOjAuMDE0fSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNpemUiOjQsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZmYwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Black dot 2",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJlbmFibGVkIjpmYWxzZSwibGVuZ3RoIjowLCJnYXAiOjh9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJjb2xvciI6IiNmZmZmZmYifSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNpemUiOjQsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjMDAwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Cyan cross 2",
+  "code": "CZ2-W3siY29sb3IiOiIjMDBlZWZmIiwibGluZXMiOnsibGVuZ3RoIjoyLCJnYXAiOjJ9LCJvdXRsaW5lIjp7ImNvbG9yIjoiIzI3MDBmZiJ9LCJkb3QiOnsic2l6ZSI6MSwiY29sb3IiOiIjMDBmZmNhIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "White X 4",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwicm90YXRpb24iOjQ1LCJsaW5lcyI6eyJsZW5ndGgiOjIsImdhcCI6MH0sIm91dGxpbmUiOnsiZW5hYmxlZCI6ZmFsc2V9LCJkb3QiOnsic2hhcGUiOiJjaXJjbGUiLCJjb2xvciI6IiNmZjAwMDAiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfX1d"
+ },
+ {
+  "name": "White cross 10",
+  "code": "CZ2-W3siY29sb3IiOiIjZmZmZmZmIiwibGluZXMiOnsibGVuZ3RoIjo0LCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJvcGFjaXR5IjowLjU5Nn0sImRvdCI6eyJzaXplIjoxLCJjb2xvciI6IiMwMDgwNDAiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfX1d"
+ },
+ {
+  "name": "Red cross with dot 2",
+  "code": "CZ2-W3siY29sb3IiOiIjZjUwNjA2IiwibGluZXMiOnsibGVuZ3RoIjoyLCJnYXAiOjB9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJjb2xvciI6IiNmZjAwMDAiLCJvcGFjaXR5IjowfSwiZG90Ijp7ImVuYWJsZWQiOnRydWUsInNpemUiOjQsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjZjUwNDA0IiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ },
+ {
+  "name": "Red cross 5",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMDAwIiwibGluZXMiOnsiZ2FwIjo0fSwib3V0bGluZSI6eyJlbmFibGVkIjpmYWxzZSwib3BhY2l0eSI6MH0sImRvdCI6eyJzaXplIjoxLCJjb2xvciI6IiNmZjAwMDAiLCJ1c2VNYWluQ29sb3IiOmZhbHNlfX1d"
+ },
+ {
+  "name": "Pink cross 3",
+  "code": "CZ2-W3siY29sb3IiOiIjZmYwMGNjIiwibGluZXMiOnsibGVuZ3RoIjoyLCJnYXAiOjJ9LCJvdXRsaW5lIjp7ImVuYWJsZWQiOmZhbHNlLCJ0aGlja25lc3MiOjYsIm9wYWNpdHkiOjB9LCJkb3QiOnsic2l6ZSI6MjAsInNoYXBlIjoiY2lyY2xlIiwiY29sb3IiOiIjMDAwMDAwIiwidXNlTWFpbkNvbG9yIjpmYWxzZX19XQ"
+ }
+]

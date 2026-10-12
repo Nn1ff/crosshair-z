@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+<title>Crosshair Z</title>
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+<!-- Icon sprite (24px grid, 1.6 stroke). Referenced via <use href="#i-…">. -->
+<svg class="sprite" aria-hidden="true">
+  <defs>
+    <symbol id="i-reticle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r=".6" class="fill"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 013 3L8 18.5 4 20z"/><path d="M13.5 7l3.5 3.5"/></symbol>
+    <symbol id="i-keys" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7 14h10"/></symbol>
+    <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4M12 8v4M10 10h4"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1011.4 0"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17L12 16.5l-5.5 4z"/></symbol>
+    <symbol id="i-bookmarked" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17L12 16.5l-5.5 4z" class="fill"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0014.5 4h-9A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16H8"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13h10l1-13M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7L4.5 11.5 9 16"/><path d="M5 11.5h9.5a5 5 0 010 10H12"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 7l4.5 4.5L15 16"/><path d="M19 11.5H9.5a5 5 0 000 10H12"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8L12 3.5 16.5 8"/><path d="M5 12.5V19a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 19v-6.5"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3.5V15M7.5 10.5L12 15l4.5-4.5"/><path d="M5 12.5V19a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 19v-6.5"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v12.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 16l-5-5-8.5 8.5"/></symbol>
+    <symbol id="i-shape" viewBox="0 0 24 24"><path d="M12 4v6M12 14v6M4 12h6M14 12h6"/></symbol>
+    <symbol id="i-center" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><circle cx="12" cy="12" r="1.8"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M4 4l16 16M10 6a9 9 0 012-.5c6 0 9.5 6.5 9.5 6.5a17 17 0 01-2.6 3.4M14.1 14.2A2.8 2.8 0 019.8 9.9M6.4 7.6A16 16 0 002.5 12S6 18.5 12 18.5a9 9 0 004-.9"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 4l8.5 4.5L12 13 3.5 8.5z"/><path d="M3.5 12.5L12 17l8.5-4.5M3.5 16.5L12 21l8.5-4.5"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 11-2.2-5.3"/><path d="M19.5 4v4.5H15"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/></symbol>
+    <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" class="fill"/></symbol>
+    <symbol id="i-ring" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.2" class="fill"/></symbol>
+    <symbol id="i-tshape" viewBox="0 0 24 24"><path d="M4 11h6M14 11h6M12 13v7"/></symbol>
+    <symbol id="i-scope" viewBox="0 0 24 24"><path d="M3 12h18M12 3v18"/><path d="M8 11v2M16 11v2M11 8h2M11 16h2"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M12 7V3M12 21v-4M7 12H3M21 12h-4"/><path d="M9 9l-2-2M15 9l2-2M9 15l-2 2M15 15l2 2"/></symbol>
+    <symbol id="i-stack" viewBox="0 0 24 24"><path d="M12 4v6M9 7h6M12 14v1.5M10.5 18h3M11 21h2"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6z"/></symbol>
+  </defs>
+</svg>
+
+<nav class="rail" aria-label="Sections">
+  <div class="rail-logo" title="Crosshair Z"><svg><use href="#i-reticle"/></svg></div>
+  <button class="rail-btn active" data-group="crosshairs" title="Crosshairs"><svg><use href="#i-grid"/></svg></button>
+  <button class="rail-btn" data-group="designer" title="Designer"><svg><use href="#i-pen"/></svg></button>
+  <button class="rail-btn" data-group="keys" title="Keybinds"><svg><use href="#i-keys"/></svg></button>
+  <button class="rail-btn" data-group="display" title="Position and size"><svg><use href="#i-screen"/></svg></button>
+  <div class="rail-spacer"></div>
+  <button class="rail-btn" data-group="app" title="Settings"><svg><use href="#i-gear"/></svg></button>
+</nav>
+
+<div class="shell">
+  <header class="topbar">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="topbar-right">
+      <div class="equipped" title="Equipped crosshair">
+        <canvas id="currentThumb" class="equipped-thumb"></canvas>
+        <span id="activeName" class="equipped-name"></span>
+      </div>
+      <label class="power" title="Show or hide the crosshair overlay">
+        <input type="checkbox" id="enabledToggle">
+        <span class="power-btn"><svg><use href="#i-power"/></svg></span>
+      </label>
+    </div>
+  </header>
+
+  <main class="content">
+    <!-- Library -->
+    <section class="page" data-page="library">
+      <div class="browse">
+        <aside class="browse-side">
+          <p class="side-label">Collections</p>
+          <ul id="categoryList" class="side-list"></ul>
+        </aside>
+        <div class="browse-main">
+          <label class="search">
+            <svg><use href="#i-search"/></svg>
+            <input type="search" id="librarySearch" placeholder="Search crosshairs" spellcheck="false">
+          </label>
+          <h1 class="browse-title" id="libraryTitle">All crosshairs</h1>
+          <ul id="presetList" class="card-grid"></ul>
+          <p class="empty hidden" id="libraryEmpty">No crosshair matches that search.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Saved -->
+    <section class="page hidden" data-page="saved">
+      <div class="page-pad">
+        <div class="page-head">
+          <div>
+            <h1>Saved</h1>
+            <p class="sub">Click to equip. Double-click to open in the designer.</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn" id="btnNew"><svg><use href="#i-plus"/></svg>New crosshair</button>
+            <button class="btn ghost icon" id="btnDup" title="Duplicate"><svg><use href="#i-copy"/></svg></button>
+            <button class="btn ghost icon" id="btnUp" title="Move earlier"><svg><use href="#i-up"/></svg></button>
+            <button class="btn ghost icon" id="btnDown" title="Move later"><svg><use href="#i-down"/></svg></button>
+            <button class="btn ghost icon danger" id="btnDel" title="Delete"><svg><use href="#i-trash"/></svg></button>
+            <button class="btn ghost" id="btnDedupe" title="Keep one of each identical crosshair">Remove duplicates</button>
+          </div>
+        </div>
+        <ul id="profileList" class="card-grid"></ul>
+      </div>
+    </section>
+
+    <!-- Import -->
+    <section class="page hidden" data-page="import">
+      <div class="page-pad">
+        <div class="page-head">
+          <div>
+            <h1>Import from Crosshair X</h1>
+            <p class="sub">Your saved Crosshair X crosshairs and subscribed workshop ones, converted to Crosshair Z.</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn ghost icon" id="cxRescan" title="Scan again"><svg><use href="#i-refresh"/></svg></button>
+            <button class="btn ghost" id="cxFile"><svg><use href="#i-file"/></svg>Import file</button>
+            <button class="btn" id="cxImportAll"><svg><use href="#i-import"/></svg>Import all</button>
+          </div>
+        </div>
+        <p class="sub" id="cxStatus"></p>
+        <ul id="cxList" class="card-grid"></ul>
+      </div>
+    </section>
+
+    <!-- Share -->
+    <section class="page hidden" data-page="share">
+      <div class="page-pad narrow">
+        <h1>Share</h1>
+        <p class="sub">Send a code to a friend. They paste it under Import code.</p>
+        <div class="block">
+          <h2>Code for the equipped crosshair</h2>
+          <p class="warn hidden" id="shareImageWarn">Image layers are left out of share codes.</p>
+          <textarea id="exportCode" readonly rows="3" spellcheck="false"></textarea>
+          <button class="btn" id="btnCopy"><svg><use href="#i-copy"/></svg>Copy code</button>
+        </div>
+        <div class="block">
+          <h2>Import code</h2>
+          <textarea id="importCode" rows="3" placeholder="Paste a CZ2- code" spellcheck="false"></textarea>
+          <div class="row">
+            <button class="btn ghost" id="btnPaste">Paste</button>
+            <button class="btn" id="btnImport"><svg><use href="#i-import"/></svg>Import code</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Designer -->
+    <section class="page hidden" data-page="designer">
+      <div class="dz">
+        <div class="dz-top">
+          <label class="dz-name"><svg><use href="#i-pen"/></svg><input type="text" id="dzName" maxlength="40" placeholder="Untitled" spellcheck="false"></label>
+          <button class="btn ghost small" id="dzShare"><svg><use href="#i-share"/></svg>Copy code</button>
+          <button class="btn ghost small" id="dzSave"><svg><use href="#i-save"/></svg>Save</button>
+          <div class="tb-spacer"></div>
+          <button class="tb-ico" id="dzUndo" title="Undo (Ctrl+Z)"><svg><use href="#i-undo"/></svg></button>
+          <button class="tb-ico" id="dzRedo" title="Redo (Ctrl+Y)"><svg><use href="#i-redo"/></svg></button>
+          <span class="tb-div"></span>
+          <button class="tb-ico" id="dzLayerUp" title="Move layer up"><svg><use href="#i-up"/></svg></button>
+          <button class="tb-ico" id="dzLayerDown" title="Move layer down"><svg><use href="#i-down"/></svg></button>
+          <button class="tb-ico" id="dzDupLayer" title="Duplicate layer (Ctrl+D)"><svg><use href="#i-copy"/></svg></button>
+          <button class="tb-ico" id="dzDelLayer" title="Delete layer (Del)"><svg><use href="#i-trash"/></svg></button>
+        </div>
+        <div class="dz-body">
+          <div class="dz-stage">
+            <canvas id="dzCanvas"></canvas>
+            <div class="dz-layers">
+              <div class="dz-layers-head"><svg><use href="#i-layers"/></svg>Layers <span class="count" id="dzLayerCount">1</span></div>
+              <ul id="dzLayerList" class="dz-layer-list"></ul>
+              <button class="dz-new-layer" id="dzNewLayer"><svg><use href="#i-plus"/></svg>New layer</button>
+            </div>
+            <div class="dz-scale"><span id="dzScaleLabel">2 px</span><span class="bar" id="dzScaleBar"></span></div>
+            <div class="dz-zoom">
+              <button id="dzZoomOut" title="Zoom out"><svg><use href="#i-minus"/></svg></button>
+              <button id="dzZoomLabel" title="Reset zoom">16×</button>
+              <button id="dzZoomIn" title="Zoom in"><svg><use href="#i-plus"/></svg></button>
+            </div>
+            <div class="dz-dock">
+              <button class="dock-btn" id="dzToolCenter" title="Center layer"><svg><use href="#i-center"/></svg></button>
+              <button class="dock-btn" id="dzToolImage" title="Add image layer"><svg><use href="#i-image"/></svg></button>
+              <button class="dock-btn" id="dzToolShape" title="Add shape layer"><svg><use href="#i-shape"/></svg></button>
+              <span class="dock-div"></span>
+              <div class="dock-tabs" id="dzDockTabs">
+                <button data-tab="design" class="active">Design</button>
+                <button data-tab="animate">Animate</button>
+              </div>
+            </div>
+            <input type="file" id="dzImageFile" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden">
+          </div>
+          <aside class="dz-panel">
+            <div class="dz-panel-head">
+              <span id="dzLayerTitle" class="dz-layer-title">Layer 1</span>
+              <div class="mini-seg" id="dzTabs">
+                <button data-tab="design" class="active">Design</button>
+                <button data-tab="animate">Animate</button>
+              </div>
+            </div>
+            <div class="dz-props" id="dzProps"></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- Hotkeys -->
+    <section class="page hidden" data-page="hotkeys">
+      <div class="page-pad narrow">
+        <h1>Hotkeys</h1>
+        <p class="sub">Click a field and press the keys. Esc cancels, Backspace clears.</p>
+        <div class="block">
+          <div id="hotkeyRows"></div>
+          <details class="more">
+            <summary><svg><use href="#i-chevron"/></svg>More shortcuts</summary>
+            <div id="moreHotkeyRows"></div>
+          </details>
+          <details class="more">
+            <summary><svg><use href="#i-chevron"/></svg>Shortcut per saved crosshair</summary>
+            <div id="profileHotkeyRows"></div>
+          </details>
+          <button class="btn ghost small" id="btnHotkeyDefaults">Reset to defaults</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Toggle -->
+    <section class="page hidden" data-page="toggle">
+      <div class="page-pad narrow">
+        <h1>Toggle</h1>
+        <p class="sub">What the show/hide shortcut and the right mouse button do.</p>
+        <div class="block">
+          <h2>Show/hide shortcut <span class="hint" id="toggleKeyLabel"></span></h2>
+          <div class="option-grid" id="kbModes"></div>
+          <label class="field inline" id="kbProfileField"><span>Switch to</span><select id="kbProfile"></select></label>
+        </div>
+        <div class="block">
+          <h2>Right mouse button</h2>
+          <p class="warn hidden" id="mouseWarn">Mouse input is unavailable on this system, so right-click and firing effects are off.</p>
+          <div class="option-grid" id="rcModes"></div>
+          <label class="field inline" id="rcProfileField"><span>Switch to</span><select id="rcProfile"></select></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Position -->
+    <section class="page hidden" data-page="position">
+      <div class="page-pad narrow">
+        <h1>Position and size</h1>
+        <p class="sub">Offsets are in screen pixels from the center of the monitor.</p>
+        <div class="block">
+          <h2>Monitor</h2>
+          <select id="monitorSelect"></select>
+        </div>
+        <div class="block">
+          <h2>Overall size</h2>
+          <div id="sizeControls"></div>
+        </div>
+        <div class="block">
+          <h2>Offset</h2>
+          <div id="offsetControls"></div>
+          <div class="nudge">
+            <button data-nudge="0,-1" title="Up"><svg><use href="#i-up"/></svg></button>
+            <button data-nudge="-1,0" title="Left"><svg class="rot-l"><use href="#i-up"/></svg></button>
+            <button id="btnCenter">Center</button>
+            <button data-nudge="1,0" title="Right"><svg class="rot-r"><use href="#i-up"/></svg></button>
+            <button data-nudge="0,1" title="Down"><svg><use href="#i-down"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="page hidden" data-page="settings">
+      <div class="page-pad narrow">
+        <h1>Settings</h1>
+        <div class="block">
+          <h2>Startup</h2>
+          <label class="check"><input type="checkbox" id="launchAtLogin">Start with Windows</label>
+          <label class="check"><input type="checkbox" id="startHidden">Open minimized to the tray</label>
+          <label class="check"><input type="checkbox" id="hideOnLaunch">Keep the crosshair hidden until I press the show/hide shortcut</label>
+        </div>
+        <div class="block">
+          <h2>Log file</h2>
+          <p class="sub">Attach this when reporting a problem.</p>
+          <code id="logPath" class="path"></code>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="../shared/crosshair-core.js"></script>
+<script src="common.js"></script>
+<script src="designer.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>
