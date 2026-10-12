@@ -273,7 +273,7 @@ function loadIcon(file, size) {
 
 function createTray() {
   try {
-    state.tray = new Tray(loadIcon(TRAY_ICON_PATH, 16));
+    state.tray = new Tray(loadIcon(TRAY_ICON_PATH)); // tray.png + tray@2x.png picked by DPI
     state.tray.setToolTip('Crosshair Z');
     state.tray.on('click', () => openSettings());
     refreshTray();

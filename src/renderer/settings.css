@@ -320,3 +320,4 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px va
 ::-webkit-scrollbar-corner { background: transparent; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.rail-logo img { width: 24px; height: 24px; image-rendering: pixelated; }
