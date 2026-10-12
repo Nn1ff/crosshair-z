@@ -242,6 +242,9 @@ function openSettings() {
     icon: ICON_PATH,
     backgroundColor: '#191c22',
     autoHideMenuBar: true,
+    // Custom title bar: page draws brand + controls, OS draws min/max/close on the right.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#20242b', symbolColor: '#95a0ae', height: 40 },
     show: false,
     webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
