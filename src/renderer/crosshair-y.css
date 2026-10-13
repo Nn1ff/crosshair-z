@@ -20,7 +20,7 @@
 .card .shortcut{position:absolute;bottom:36px;left:8px;margin:0;padding:2px 5px;font-size:10px;background:var(--graphite);border-radius:4px}
 .card .mark{top:4px;right:4px;width:30px;height:30px;padding:8px;border-radius:50%;background:transparent;color:var(--faint);transition:background-color .15s ease,transform .15s ease,opacity .15s ease}
 .card .mark svg{width:14px;height:14px}.card .mark:hover{background:rgba(255,255,255,.08);color:var(--text)}.card .mark.on{color:var(--coat)}.card .mark:active{transform:scale(.92)}
-@media(prefers-reduced-motion:reduce){.card,.card .mark{transition:none}}
+
 
 /* Show/hide switch: pill track with sliding eye thumb (Crosshair Y style, blue). */
 .power-btn{position:relative;display:block;width:58px;height:34px;padding:0;border-radius:34px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.1);color:inherit;transition:background-color .2s ease,border-color .2s ease,box-shadow .2s ease}
