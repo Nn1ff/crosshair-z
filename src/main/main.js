@@ -160,14 +160,12 @@ function layoutOverlay() {
   } catch (err) {
     log.error('overlay setBounds failed', err);
   }
-  sendTo(win, 'overlay:render', { crosshair: ch, scale: c.display.scale, firing: state.firing });
+  // Visibility is applied inside the renderer; the window itself stays shown. Hiding/showing a
+  // transparent native window raced with its repaint and z-order, so toggles sometimes did nothing.
+  sendTo(win, 'overlay:render', { crosshair: ch, scale: c.display.scale, firing: state.firing, visible });
   if (state.capture) return;
-  if (visible) {
-    if (!win.isVisible()) win.showInactive();
-    win.setAlwaysOnTop(true, 'screen-saver');
-  } else if (win.isVisible()) {
-    win.hide();
-  }
+  if (!win.isVisible()) win.showInactive();
+  win.setAlwaysOnTop(true, 'screen-saver');
 }
 
 /** Games grab z-order; reassert topmost periodically while visible. */

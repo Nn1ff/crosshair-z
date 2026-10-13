@@ -1,7 +1,7 @@
 {
   "name": "crosshair-z",
   "productName": "Crosshair Z",
-  "version": "1.7.5",
+  "version": "1.7.6",
   "description": "Custom crosshair overlay for games",
   "main": "src/main/main.js",
   "author": "Mario Olteanu",

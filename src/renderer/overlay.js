@@ -45,6 +45,8 @@
     current = C.sanitizeCrosshair(data && data.crosshair);
     scale = (data && data.scale) || 1;
     anim.setFiring(!!(data && data.firing));
+    // missing flag (older main) counts as visible
+    canvas.style.visibility = data && data.visible === false ? 'hidden' : 'visible';
     render();
     kick();
   });
