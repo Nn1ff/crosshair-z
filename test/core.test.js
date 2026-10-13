@@ -146,9 +146,12 @@ test('starter pack decodes completely and new configs start from it', () => {
   assert.deepStrictEqual(defaultConfig().profiles[0].crosshair, pack[0].crosshair);
 });
 
-test('toggle default is Alt+Shift+Z; old untouched default migrates, custom keys stay', () => {
-  assert.strictEqual(defaultConfig().hotkeys.toggle, 'Alt+Shift+Z');
-  assert.strictEqual(sanitizeConfig({ version: 3, hotkeys: { toggle: 'CommandOrControl+Shift+X' } }).hotkeys.toggle, 'Alt+Shift+Z');
+test('toggle default is Alt+Shift+X; old untouched defaults migrate, custom keys stay', () => {
+  assert.strictEqual(defaultConfig().hotkeys.toggle, 'Alt+Shift+X');
+  assert.strictEqual(sanitizeConfig({ version: 3, hotkeys: { toggle: 'CommandOrControl+Shift+X' } }).hotkeys.toggle, 'Alt+Shift+X');
+  assert.strictEqual(sanitizeConfig({ version: 4, hotkeys: { toggle: 'Alt+Shift+Z' } }).hotkeys.toggle, 'Alt+Shift+X');
+  assert.strictEqual(sanitizeConfig({ version: 3, hotkeys: { toggle: 'Alt+Shift+Z' } }).hotkeys.toggle, 'Alt+Shift+Z');
   assert.strictEqual(sanitizeConfig({ version: 3, hotkeys: { toggle: 'F7' } }).hotkeys.toggle, 'F7');
   assert.strictEqual(sanitizeConfig({ version: 4, hotkeys: { toggle: 'CommandOrControl+Shift+X' } }).hotkeys.toggle, 'CommandOrControl+Shift+X');
+  assert.strictEqual(sanitizeConfig({ version: 5, hotkeys: { toggle: 'Alt+Shift+Z' } }).hotkeys.toggle, 'Alt+Shift+Z');
 });

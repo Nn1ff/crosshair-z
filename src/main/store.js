@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const core = require('../shared/crosshair-core');
 const { loadDefaultPack } = require('../shared/default-pack');
 
-const CONFIG_VERSION = 4;
+const CONFIG_VERSION = 5;
 const SAVE_DEBOUNCE_MS = 300;
 const MAX_PROFILES = 200;
 const MAX_NAME_LEN = 40;
@@ -17,7 +17,7 @@ const RIGHT_CLICK_MODES = ['off', 'hideHold', 'hideToggle', 'switchHold', 'switc
 
 /** Only toggle is bound by default; the rest are optional (empty = not registered). */
 const DEFAULT_HOTKEYS = Object.freeze({
-  toggle: 'Alt+Shift+Z',
+  toggle: 'Alt+Shift+X',
   next: '',
   prev: '',
   settings: '',
@@ -29,6 +29,9 @@ const DEFAULT_HOTKEYS = Object.freeze({
 
 /** Toggle default before v4. */
 const LEGACY_TOGGLE_DEFAULT = 'CommandOrControl+Shift+X';
+
+/** Toggle default in v4. */
+const V4_TOGGLE_DEFAULT = 'Alt+Shift+Z';
 
 /** v1/v2 defaults for optional actions — cleared on migration to v3 unless user changed them. */
 const LEGACY_DEFAULT_HOTKEYS = Object.freeze({
@@ -113,8 +116,10 @@ function sanitizeConfig(raw) {
   for (const k of Object.keys(DEFAULT_HOTKEYS)) {
     let v = typeof hk[k] === 'string' && hk[k].length <= MAX_ACCEL_LEN ? hk[k] : DEFAULT_HOTKEYS[k];
     if (version < 3 && v === LEGACY_DEFAULT_HOTKEYS[k]) v = '';
-    // v4: toggle default moved from Ctrl+Shift+X to Alt+Shift+Z (only if user kept the old default).
+    // Toggle default moved Ctrl+Shift+X (<v4) → Alt+Shift+Z (v4) → Alt+Shift+X (v5).
+    // Only untouched defaults migrate; a key the user picked themselves stays.
     if (version < 4 && k === 'toggle' && v === LEGACY_TOGGLE_DEFAULT) v = DEFAULT_HOTKEYS.toggle;
+    if (version === 4 && k === 'toggle' && v === V4_TOGGLE_DEFAULT) v = DEFAULT_HOTKEYS.toggle;
     hotkeys[k] = v;
   }
   const ids = new Set(profiles.map((p) => p.id));
