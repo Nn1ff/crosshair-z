@@ -24,7 +24,6 @@
 .page:not(.hidden) .option-grid { animation: cz-fade var(--t-med) ease; }
 
 /* Discover: staggered entrance */
-.page:not(.hidden) .quick-actions { animation: cz-rise-lg .6s var(--ease-soft) both; }
 .page:not(.hidden) .featured-title,
 .page:not(.hidden) .discover-wrap .card-grid { animation: cz-rise-lg .6s var(--ease-soft) .32s both; }
 
@@ -33,12 +32,12 @@
 
 /* Interactive surfaces: uniform quick transitions */
 .rail-btn, .tab, .side-item, .option, .dz-layer, .text-action,
-.quick-actions button, .mini-seg button, .dock-btn, .tb-ico {
+.mini-seg button, .dock-btn, .tb-ico {
   transition: color var(--t-fast) ease, background-color var(--t-fast) ease, border-color var(--t-fast) ease, box-shadow var(--t-fast) ease;
 }
 .btn { transition: filter var(--t-fast) ease, background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease, scale .1s ease; }
-.btn:active:not(:disabled), .quick-actions button:active, .dock-btn:active { scale: .97; }
-.quick-actions button, .dock-btn { transition-property: color, background-color, border-color, box-shadow, scale; }
+.btn:active:not(:disabled), .dock-btn:active { scale: .97; }
+.dock-btn { transition-property: color, background-color, border-color, box-shadow, scale; }
 
 /* Power toggle: jelly bounce when switched on */
 .power input:checked + .power-btn { animation: cz-jelly .4s ease; }
