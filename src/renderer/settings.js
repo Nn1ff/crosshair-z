@@ -334,6 +334,7 @@
     none: (u) => `You have the latest version (${u.current}).`,
     available: (u) => `Version ${u.version} is available (you have ${u.current}).`,
     downloading: (u) => `Downloading ${u.version}… Crosshair Z restarts on its own when done.`,
+    launched: (u) => `Starting ${u.version}…`,
     error: (u) => u.error || 'Update failed.',
   };
 
@@ -346,7 +347,7 @@
     const install = $('btnUpdateInstall');
     install.classList.toggle('hidden', u.status !== 'available');
     install.textContent = u.version ? `Update to ${u.version}` : 'Update';
-    $('btnUpdateCheck').disabled = u.status === 'checking' || u.status === 'downloading';
+    $('btnUpdateCheck').disabled = ['checking', 'downloading', 'launched'].includes(u.status);
     const rail = document.querySelector('.rail-btn[data-group="app"]');
     if (rail) rail.classList.toggle('has-update', u.status === 'available');
   }

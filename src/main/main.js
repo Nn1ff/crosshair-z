@@ -13,6 +13,7 @@ const { ConfigStore, cleanName, cleanAccel, newId, fingerprint, dedupeProfiles, 
 
 const TOPMOST_REASSERT_MS = 2000;
 const UPDATE_CHECK_DELAY_MS = 5000; // after boot, so startup is never slowed by the network
+const UPDATE_HANDOVER_TIMEOUT_MS = 30000; // new version should have taken over by then
 const MOVE_STEP_PX = 1;
 const ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'icon.png');
 const TRAY_ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'tray.png');
@@ -43,7 +44,7 @@ const state = {
   rcAlt: false, // right-click alternate active (hide or switch)
   firing: false,
   launchHidden: false, // 'hide crosshair on launch' until first toggle
-  /** status: idle | checking | none | available | downloading | error */
+  /** status: idle | checking | none | available | downloading | launched | error */
   update: { status: 'idle', release: null, error: null },
 };
 
@@ -375,7 +376,7 @@ function setUpdate(patch) {
 }
 
 async function runUpdateCheck() {
-  if (state.capture || ['checking', 'downloading'].includes(state.update.status)) return;
+  if (state.capture || ['checking', 'downloading', 'launched'].includes(state.update.status)) return;
   setUpdate({ status: 'checking', error: null });
   try {
     const release = await checkForUpdate({ fetchFn: (url, opts) => net.fetch(url, opts), currentVersion: app.getVersion(), log });
@@ -406,7 +407,14 @@ async function installUpdate() {
       setUpdate({ status: 'error', error: `Could not start the new version: ${err.message}` });
     });
     child.unref();
+    setUpdate({ status: 'launched' });
     log.info('update launched, waiting for handover', { exe });
+    // normally the handover quits this process long before; if not, tell the user where the exe is
+    setTimeout(() => {
+      if (state.update.status !== 'launched') return;
+      log.warn('update handover timed out', { exe });
+      setUpdate({ status: 'error', error: `Version ${release.version} was saved as "${exe}" but did not take over. Close this window from the tray (Quit) and start it.` });
+    }, UPDATE_HANDOVER_TIMEOUT_MS);
   } catch (err) {
     setUpdate({ status: 'error', error: `Download failed: ${err.message}` });
   }
