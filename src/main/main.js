@@ -382,11 +382,19 @@ function registerHotkeys() {
   return status;
 }
 
+/**
+ * Register/unregister autostart. The portable build runs from a temp extraction dir that is
+ * wiped on exit, so the login item must point at the original portable exe instead.
+ */
 function applyLoginItem() {
+  const path = LAUNCH_EXE;
+  const openAtLogin = cfg().launchAtLogin;
   try {
-    app.setLoginItemSettings({ openAtLogin: cfg().launchAtLogin, args: ['--hidden'] });
+    app.setLoginItemSettings({ openAtLogin, path, args: ['--hidden'] });
+    const now = app.getLoginItemSettings({ path, args: ['--hidden'] });
+    log.info('login item applied', { openAtLogin, path, registered: now.openAtLogin, willLaunch: now.executableWillLaunchAtLogin });
   } catch (err) {
-    log.error('setLoginItemSettings failed', err);
+    log.error('setLoginItemSettings failed', { error: err.message, path });
   }
 }
 
