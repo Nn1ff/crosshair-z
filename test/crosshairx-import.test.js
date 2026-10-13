@@ -96,9 +96,12 @@ test('ring / diamond dots and triangle arms map natively; rotation stays on the 
     line: { length: 4, thickness: 1, offset: 3, opacity: 1, color: '#FFFFFF', rotation: 45, shape: 'triangle' },
   }), 'x').crosshair.layers;
   assert.deepStrictEqual([rot.length, rot[0].rotation, rot[0].dot.shape, rot[0].lines.shape], [1, 45, 'diamond', 'triangle']);
-  const chevron = convertCrosshairX(sample({ line: { length: 4, thickness: 2, offset: 2, opacity: 1, shape: 'chevronIn' } }), 'x');
-  assert.strictEqual(chevron.crosshair.layers[0].lines.shape, 'rectangle');
-  assert.ok(chevron.warnings.some((w) => /chevronIn/.test(w)));
+  const chevron = convertCrosshairX(sample({ line: { length: 4, thickness: 2, offset: 2, opacity: 1, shape: 'chevronIn', angle: 90, roundness: 0.5, armCount: 6 } }), 'x');
+  const cl = chevron.crosshair.layers[0].lines;
+  assert.deepStrictEqual([cl.shape, cl.angle, cl.roundness, cl.count], ['chevronIn', 90, 0.5, 6]);
+  const odd = convertCrosshairX(sample({ line: { length: 4, thickness: 2, offset: 2, opacity: 1, shape: 'star' } }), 'x');
+  assert.strictEqual(odd.crosshair.layers[0].lines.shape, 'rectangle');
+  assert.ok(odd.warnings.some((w) => /star/.test(w)));
   const noLines = convertCrosshairX(sample({ line: { length: 4, thickness: 0, offset: 2, opacity: 1 }, dot: { diameter: 2, opacity: 1, color: '#FFFFFF', shape: 'square' } }), 'x').crosshair.layers;
   assert.deepStrictEqual([noLines.length, noLines[0].lines.enabled, noLines[0].dot.enabled], [1, false, true]);
   assert.throws(() => convertCrosshairX(sample({ line: { length: 0, opacity: 0 } }), 'x'), /no visible parts/);
@@ -112,4 +115,20 @@ test('line blur stays off the dot; outline with thickness 0 renders 1px like X (
   }), 'x').crosshair.layers;
   assert.strictEqual(l.length, 1);
   assert.deepStrictEqual([l[0].dot.blur, l[0].rotation, l[0].lines.enabled, l[0].dot.enabled, l[0].outline.enabled, l[0].outline.thickness], [0, 0, false, true, true, 1]);
+});
+
+test('Y shape / text / draw layers convert to form / text / draw', () => {
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  const r = convertCrosshairX({
+    name: 'mix',
+    model: [
+      { type: 'shape', shape: 'circle', width: 10, height: 6, color: 'Red', opacity: 0.5, rotation: 30, cornerRadius: 0, outline: { thickness: 2, opacity: 1, color: '#000000' }, position: { x: 1, y: 2 }, layer: { size: 1 } },
+      { type: 'text', text: 'GG', fontSize: 20, fontWeight: 400, letterSpacing: 2, layout: 'circle', radius: 40, color: '#FFFFFF', opacity: 1, outline: { thickness: 0, opacity: 1 }, position: { x: 0, y: 0 }, layer: { size: 1 } },
+      { type: 'draw', image: png, width: 32, height: 32, opacity: 0.8, position: { x: 0, y: 0 }, layer: { size: 1 } },
+    ],
+  });
+  const [form, text, draw] = r.crosshair.layers;
+  assert.deepStrictEqual([form.kind, form.form.type, form.form.width, form.form.height, form.form.color, form.rotation, form.offsetX, form.outline.enabled], ['form', 'circle', 10, 6, '#ff0000', 30, 1, true]);
+  assert.deepStrictEqual([text.kind, text.text.value, text.text.bold, text.text.layout, text.text.radius, text.outline.enabled], ['text', 'GG', false, 'circle', 40, false]);
+  assert.deepStrictEqual([draw.kind, draw.draw.src, draw.draw.opacity, draw.scale], ['draw', png, 0.8, 0.5]);
 });

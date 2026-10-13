@@ -187,3 +187,21 @@ test('toggle default is Alt+Shift+X; old untouched defaults migrate, custom keys
   assert.strictEqual(sanitizeConfig({ version: 4, hotkeys: { toggle: 'CommandOrControl+Shift+X' } }).hotkeys.toggle, 'CommandOrControl+Shift+X');
   assert.strictEqual(sanitizeConfig({ version: 5, hotkeys: { toggle: 'Alt+Shift+Z' } }).hotkeys.toggle, 'Alt+Shift+Z');
 });
+
+test('new arm shapes / layer kinds: sanitize, share, overlay size', () => {
+  const ch = core.sanitizeCrosshair({ version: core.SCHEMA_VERSION, layers: [
+    { lines: { shape: 'arc', count: 6, offset: 20 } },
+    { lines: { shape: 'tShape', capLength: 30, capThickness: 4 } },
+    { kind: 'form', form: { type: 'triangle', width: 40, height: 30 } },
+    { kind: 'text', text: { value: 'HELLO', size: 30 } },
+    { kind: 'text', text: { value: '' } },
+  ] });
+  assert.deepStrictEqual(ch.layers.map((l) => l.kind), ['shape', 'shape', 'form', 'text', 'text']);
+  assert.deepStrictEqual([ch.layers[0].lines.shape, ch.layers[0].lines.count], ['arc', 6]);
+  assert.strictEqual(ch.layers[4].text.value, '');
+  assert.deepStrictEqual(core.decodeShareCode(core.encodeShareCode(ch)), ch);
+  assert.ok(core.crosshairExtent({ layers: [ch.layers[2]] }) >= 25);
+  assert.ok(core.crosshairExtent({ layers: [ch.layers[3]] }) >= 50);
+  assert.ok(core.crosshairExtent({ layers: [ch.layers[1]] }) >= 15);
+  assert.strictEqual(core.sanitizeLayer({ lines: { count: 12 } }).lines.count, 8);
+});

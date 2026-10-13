@@ -28,8 +28,16 @@
   const BLUR_REACH = 3; // gaussian blur visibly spreads ~3σ
   const OUTLINE_MITER_LIMIT = 4; // SVG default, matches Crosshair Y triangle outlines
   const ARMS = ['top', 'bottom', 'left', 'right'];
-  const LINE_SHAPES = ['rectangle', 'triangle'];
+  const LINE_SHAPES = ['rectangle', 'triangle', 'chevronIn', 'chevronOut', 'arc', 'tShape'];
+  const CRISP_LINE_SHAPES = ['rectangle', 'triangle']; // pixel-exact path for the classic 4 arms
   const DOT_SHAPES = ['square', 'circle', 'ring', 'diamond'];
+  const FORM_TYPES = ['square', 'circle', 'triangle'];
+  const TEXT_LAYOUTS = ['line', 'circle'];
+  const LAYER_KINDS = ['shape', 'form', 'text', 'draw', 'image'];
+  const ARM_ANGLE = { top: 0, right: 90, bottom: 180, left: 270 };
+  const DRAW_SIZE = 64; // drawing layers are a DRAW_SIZE² pixel canvas centered on the layer anchor
+  const FONT_FAMILY = '"Open Sans", "Segoe UI", sans-serif';
+  const TEXT_WIDTH_PER_EM = 0.7; // width estimate (no canvas in the main process), as Crosshair Y
 
   /** Leaf specs: n = number, b = boolean, c = hex color, e = enum, s = string, img = image data URL. */
   const OPACITY = { t: 'n', min: 0, max: 1 };
@@ -37,10 +45,10 @@
   const LAYER_SCHEMA = {
     name: { t: 's', max: 24 },
     visible: { t: 'b' },
-    kind: { t: 'e', values: ['shape', 'image'] },
+    kind: { t: 'e', values: LAYER_KINDS }, // shape = crosshair (lines/dot), form = geometric shape
     offsetX: { t: 'n', min: -300, max: 300, int: true },
     offsetY: { t: 'n', min: -300, max: 300, int: true },
-    rotation: { t: 'n', min: -180, max: 180, int: true }, // lines + image; the dot never rotates
+    rotation: { t: 'n', min: -180, max: 180, int: true }, // lines/form/text/image; the dot never rotates
     scale: { t: 'n', min: 0.25, max: 8 },
     lines: {
       enabled: { t: 'b' },
@@ -55,6 +63,11 @@
       bottom: { t: 'b' },
       left: { t: 'b' },
       right: { t: 'b' },
+      count: { t: 'n', min: 3, max: 8, int: true }, // arms around the center; 4 = top/bottom/left/right
+      angle: { t: 'n', min: 10, max: 170, int: true }, // chevron opening
+      roundness: { t: 'n', min: 0, max: 1 }, // chevron tip
+      capLength: { t: 'n', min: 0, max: 100, int: true }, // T-shape cap
+      capThickness: { t: 'n', min: 0, max: 40, int: true },
     },
     dot: {
       enabled: { t: 'b' },
@@ -79,6 +92,32 @@
       opacity: OPACITY,
       blur: BLUR,
     },
+    form: {
+      type: { t: 'e', values: FORM_TYPES },
+      width: { t: 'n', min: 1, max: 400, int: true },
+      height: { t: 'n', min: 1, max: 400, int: true },
+      corner: { t: 'n', min: 0, max: 200, int: true }, // square corner radius
+      color: { t: 'c' },
+      opacity: OPACITY,
+      blur: BLUR,
+    },
+    text: {
+      value: { t: 's', max: 40, empty: true },
+      size: { t: 'n', min: 4, max: 120, int: true },
+      bold: { t: 'b' },
+      spacing: { t: 'n', min: -10, max: 40, int: true },
+      layout: { t: 'e', values: TEXT_LAYOUTS },
+      radius: { t: 'n', min: 4, max: 300, int: true },
+      color: { t: 'c' },
+      opacity: OPACITY,
+      blur: BLUR,
+    },
+    draw: {
+      src: { t: 'img' }, // DRAW_SIZE² PNG, painted in the designer
+      color: { t: 'c' }, // pen color
+      opacity: OPACITY,
+      blur: BLUR,
+    },
     /** Z firing (unchanged): arms/ring spread per side, kick up, ramp time in ms. */
     firing: {
       enabled: { t: 'b' },
@@ -96,10 +135,16 @@
     offsetY: 0,
     rotation: 0,
     scale: 1,
-    lines: { enabled: true, shape: 'rectangle', color: '#00ff66', opacity: 1, length: 6, thickness: 2, offset: 6, blur: 0, top: true, bottom: true, left: true, right: true },
+    lines: {
+      enabled: true, shape: 'rectangle', color: '#00ff66', opacity: 1, length: 6, thickness: 2, offset: 6, blur: 0,
+      top: true, bottom: true, left: true, right: true, count: 4, angle: 60, roundness: 0, capLength: 8, capThickness: 2,
+    },
     dot: { enabled: false, shape: 'square', size: 2, thickness: 1, color: '#ffffff', useMainColor: true, opacity: 1, blur: 0 },
     outline: { enabled: true, thickness: 1, color: '#000000', opacity: 1, blur: 0 },
     image: { src: '', size: 64, opacity: 1, blur: 0 },
+    form: { type: 'square', width: 12, height: 12, corner: 0, color: '#00ff66', opacity: 1, blur: 0 },
+    text: { value: 'Z', size: 16, bold: true, spacing: 0, layout: 'line', radius: 30, color: '#ffffff', opacity: 1, blur: 0 },
+    draw: { src: '', color: '#00ff66', opacity: 1, blur: 0 },
     firing: { enabled: false, spread: 6, kick: 0, speed: 120 },
   });
 
@@ -141,8 +186,11 @@
         return typeof value === 'string' && COLOR_RE.test(value) ? value.toLowerCase() : fallback;
       case 'e':
         return spec.values.includes(value) ? value : fallback;
-      case 's':
-        return typeof value === 'string' ? value.replace(/[\r\n\t]/g, ' ').trim().slice(0, spec.max) || fallback : fallback;
+      case 's': {
+        if (typeof value !== 'string') return fallback;
+        const s = value.replace(/[\r\n\t]/g, ' ').trim().slice(0, spec.max);
+        return s || (spec.empty ? '' : fallback);
+      }
       case 'img':
         return typeof value === 'string' && value.length <= MAX_IMAGE_CHARS && IMAGE_RE.test(value) ? value : fallback;
       case 'n': {
@@ -256,6 +304,9 @@
     dot: ['opacity', 'blur', 'thickness'],
     outline: ['blur'],
     image: ['opacity', 'blur'],
+    form: ['type'],
+    text: ['value'],
+    draw: ['src'],
   };
 
   function hasMarker(layer, markers) {
@@ -454,6 +505,7 @@
    *   near = first pixel of bottom/right arms, far = end (exclusive) of top/left arms.
    */
   function lineGeometry(L, s) {
+    if (L.count !== 4 || !CRISP_LINE_SHAPES.includes(L.shape)) return radialGeometry(L, s);
     const arms = visibleArms(L);
     const len = Math.round(L.length * s);
     if (!L.enabled || !arms.length || len <= 0 || L.thickness <= 0 || L.opacity <= 0) return null;
@@ -467,6 +519,61 @@
     const g = Math.round(((o - odd) / 2) * s + Math.round((L.spread || 0) * s));
     const oddOut = aligned ? t % 2 : odd;
     return { t, center: (t % 2) / 2, near: g + oddOut, far: -g, len, arms };
+  }
+
+  /**
+   * Geometry for chevron / arc / T-shape arms and for 3–8 arms around the center (Crosshair Y's
+   * smooth path rendering). Each arm is drawn pointing up, then turned to its angle.
+   * With 4 arms the top/bottom/left/right switches apply; other counts show every arm.
+   */
+  function radialGeometry(L, s) {
+    const angles = L.count === 4
+      ? visibleArms(L).map((a) => ARM_ANGLE[a])
+      : Array.from({ length: L.count }, (_, i) => (360 / L.count) * i);
+    const len = L.length * s;
+    if (!L.enabled || !angles.length || len <= 0 || L.thickness <= 0 || L.opacity <= 0) return null;
+    const t = Math.max(1, L.thickness * s);
+    return {
+      radial: true,
+      shape: L.shape,
+      angles,
+      t,
+      len,
+      half: (L.offset / 2 + (L.spread || 0)) * s, // distance from center to the arm's inner end
+      slot: 360 / L.count,
+      angle: L.angle,
+      roundness: L.roundness,
+      capLength: L.capLength * s,
+      capThickness: L.capThickness * s,
+      center: (px(L.thickness, s) % 2) / 2,
+    };
+  }
+
+  /** Farthest point of the lines from the line center (generous; used for the overlay size). */
+  function linesReach(geo) {
+    if (!geo.radial) return Math.hypot(Math.max(Math.abs(geo.near), Math.abs(geo.far)) + geo.len + 1, geo.t / 2 + 1);
+    const along = Math.abs(geo.half) + geo.len + geo.t + (geo.shape === 'tShape' ? geo.capThickness : 0);
+    const across = Math.max(geo.t, geo.shape === 'tShape' ? geo.capLength / 2 : 0, geo.shape.startsWith('chevron') ? geo.len : 0);
+    return Math.hypot(along, across) + 1;
+  }
+
+  /** Width estimate of a text layer's line in px (main process has no canvas to measure). */
+  function textWidth(T, s) {
+    return (T.value.length * T.size * TEXT_WIDTH_PER_EM + Math.max(0, T.value.length - 1) * T.spacing) * s;
+  }
+
+  /** Reach of a form / text / drawing / image layer from its anchor, without outline and blur. */
+  function bodyReach(l, s) {
+    switch (l.kind) {
+      case 'image': return (l.image.size * s * Math.SQRT2) / 2;
+      case 'draw': return (DRAW_SIZE * s * Math.SQRT2) / 2;
+      case 'form': return (Math.hypot(l.form.width, l.form.height) * s) / 2 + 1;
+      case 'text':
+        if (!l.text.value) return 0;
+        if (l.text.layout === 'circle') return (l.text.radius + l.text.size * 1.2) * s;
+        return Math.hypot(textWidth(l.text, s) / 2, l.text.size * s) + 1;
+      default: return 0;
+    }
   }
 
   /** Line center offset from the anchor corner: pixel center for odd thickness, even if lines are off. */
@@ -514,16 +621,17 @@
     const s = l.scale * g;
     const blurOf = (b) => b * BLUR_REACH;
     let r = 0;
+    const o = l.outline.enabled ? l.outline.thickness : 0;
+    const oBlur = l.outline.enabled ? blurOf(l.outline.blur) : 0;
     if (l.kind === 'image') {
-      r = (l.image.size * s * Math.SQRT2) / 2 + blurOf(l.image.blur);
+      r = bodyReach(l, s) + blurOf(l.image.blur);
+    } else if (l.kind === 'draw') {
+      r = bodyReach(l, s) + blurOf(l.draw.blur);
+    } else if (l.kind === 'form' || l.kind === 'text') {
+      r = bodyReach(l, s) + o + Math.max(blurOf(l[l.kind].blur), oBlur);
     } else {
-      const o = l.outline.enabled ? l.outline.thickness : 0;
-      const oBlur = l.outline.enabled ? blurOf(l.outline.blur) : 0;
       const geo = lineGeometry(l.lines, s);
-      if (geo) {
-        const along = Math.max(Math.abs(geo.near), Math.abs(geo.far)) + geo.len + 1;
-        r = Math.max(r, Math.hypot(along, geo.t / 2 + 1) + o + Math.max(blurOf(l.lines.blur), oBlur));
-      }
+      if (geo) r = Math.max(r, linesReach(geo) + o + Math.max(blurOf(l.lines.blur), oBlur));
       const dot = dotGeometry(l.dot, s, lineCenter(l.lines, s));
       if (dot) {
         const reach = dot.shape === 'ring' ? dot.size / 2 + dot.ring / 2 : (dot.size * Math.SQRT2) / 2;
@@ -564,9 +672,22 @@
     imageListener = cb;
   }
 
+  /**
+   * Put an already-rendered bitmap (e.g. a drawing canvas) in the cache under its data URL, so the
+   * first frame after an edit does not wait for the URL to decode. The source is copied.
+   */
+  function primeImage(src, source) {
+    if (!src || typeof OffscreenCanvas === 'undefined') return;
+    const copy = new OffscreenCanvas(source.width, source.height);
+    copy.getContext('2d').drawImage(source, 0, 0);
+    imageCache.set(src, copy);
+    if (imageCache.size > MAX_IMAGE_CACHE) imageCache.delete(imageCache.keys().next().value);
+  }
+
   function getImage(src) {
     if (!src || typeof Image === 'undefined') return null;
     let img = imageCache.get(src);
+    if (typeof OffscreenCanvas !== 'undefined' && img instanceof OffscreenCanvas) return img;
     if (!img) {
       img = new Image();
       img.onload = () => imageListener && imageListener();
@@ -618,8 +739,111 @@
     ctx.closePath();
   }
 
+  /** Fill the current path; with grow > 0 also stroke it 2·grow wide so the outline sits grow px outside. */
+  function fillGrown(ctx, grow) {
+    ctx.fill();
+    if (!grow) return;
+    ctx.lineWidth = grow * 2;
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = OUTLINE_MITER_LIMIT;
+    ctx.stroke();
+  }
+
+  /** Chevron polyline with Crosshair Y's rounded tip (0 = sharp, 1 = full curve). */
+  function chevronPath(ctx, p0, p1, p2, roundness) {
+    const r = clamp(roundness, 0, 1);
+    ctx.beginPath();
+    ctx.moveTo(p0[0], p0[1]);
+    ctx.lineTo(p1[0] + r * (p0[0] - p1[0]), p1[1] + r * (p0[1] - p1[1]));
+    ctx.quadraticCurveTo(p1[0], p1[1], p1[0] + r * (p2[0] - p1[0]), p1[1] + r * (p2[1] - p1[1]));
+    ctx.lineTo(p2[0], p2[1]);
+  }
+
+  /** Annular sector of an arc arm pointing up (Crosshair Y "flat" caps). */
+  function arcPath(ctx, geo, grow) {
+    const toRad = Math.PI / 180;
+    const g = Math.max(0.5, geo.half);
+    const outer = g + Math.max(0.5, geo.t);
+    let sweep = Math.min(geo.slot, (geo.len / g) / toRad);
+    const full = sweep >= geo.slot - 0.01;
+    let outerSweep = full ? sweep : geo.slot - (g / outer) * (geo.slot - sweep);
+    if (full) { // tiny overlap so neighbouring full arcs leave no seam
+      const seam = (0.5 / outer) / toRad;
+      sweep += seam * 2;
+      outerSweep += seam * 2;
+    }
+    sweep = Math.min(sweep, 179.9);
+    outerSweep = Math.min(outerSweep, 179.9);
+    const c = -90;
+    // full arcs join into a ring: their outline only grows inward/outward, never across the seams
+    const radial = full ? grow : 0;
+    ctx.beginPath();
+    ctx.arc(0, 0, outer + radial, (c - outerSweep / 2) * toRad, (c + outerSweep / 2) * toRad);
+    ctx.arc(0, 0, Math.max(0, g - radial), (c + sweep / 2) * toRad, (c - sweep / 2) * toRad, true);
+    ctx.closePath();
+    fillGrown(ctx, full ? 0 : grow);
+  }
+
+  /** One arm pointing up from the line center (radial / special shapes). */
+  function paintTopArm(ctx, geo, grow) {
+    const { t, len, half } = geo;
+    switch (geo.shape) {
+      case 'triangle':
+        polygon(ctx, [[0, -half], [-t / 2, -half - len], [t / 2, -half - len]]);
+        if (grow) {
+          ctx.lineWidth = grow;
+          ctx.miterLimit = OUTLINE_MITER_LIMIT;
+          ctx.stroke();
+        } else {
+          ctx.fill();
+        }
+        return;
+      case 'chevronIn':
+      case 'chevronOut': {
+        const open = (Math.min(geo.shape === 'chevronOut' ? 170 : 180, geo.angle) / 2) * (Math.PI / 180);
+        const w = len * Math.sin(open);
+        const depth = len * Math.cos(open);
+        const sw = Math.max(1, Math.round(t));
+        const gap = Math.round(half);
+        const start = geo.shape === 'chevronIn' && gap === 0 ? 0 : gap + Math.round(sw / 2);
+        if (geo.shape === 'chevronIn') chevronPath(ctx, [-w, -start - depth], [0, -start], [w, -start - depth], geo.roundness);
+        else chevronPath(ctx, [-w, -start], [0, -start - depth], [w, -start], geo.roundness);
+        ctx.lineWidth = sw + grow * 2;
+        ctx.lineCap = 'square';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        return;
+      }
+      case 'arc':
+        arcPath(ctx, geo, grow);
+        return;
+      case 'tShape': {
+        const sl = -t / 2, sr = t / 2, st = -half - len, sb = -half;
+        const cl = -geo.capLength / 2, cr = geo.capLength / 2, ct = st - geo.capThickness;
+        const pts = geo.capLength > 0 && geo.capThickness > 0
+          ? [[sl, sb], [sl, st], [cl, st], [cl, ct], [cr, ct], [cr, st], [sr, st], [sr, sb]]
+          : [[sl, sb], [sl, st], [sr, st], [sr, sb]];
+        polygon(ctx, pts);
+        fillGrown(ctx, grow);
+        return;
+      }
+      default:
+        ctx.fillRect(-t / 2 - grow, -half - len - grow, t + grow * 2, len + grow * 2);
+    }
+  }
+
   /** Lines pass. grow > 0 draws the outline silhouette (rect: grown box, triangle: stroked edge like Y). */
   function paintLines(ctx, L, geo, grow) {
+    if (geo.radial) {
+      for (const a of geo.angles) {
+        ctx.save();
+        ctx.translate(geo.center, geo.center);
+        if (a) ctx.rotate((a * Math.PI) / 180);
+        paintTopArm(ctx, geo, grow);
+        ctx.restore();
+      }
+      return;
+    }
     for (const rect of armRects(geo)) {
       if (L.shape === 'triangle') {
         polygon(ctx, armTriangle(rect, geo.center));
@@ -739,6 +963,140 @@
     ctx.restore();
   }
 
+  /** Grow a triangle outward by d along its corner bisectors (miter), as Crosshair Y outlines it. */
+  function expandTriangle(pts, d) {
+    const n = pts.length;
+    const normals = pts.map(([x, y], i) => {
+      const [nx, ny] = pts[(i + 1) % n];
+      const len = Math.hypot(nx - x, ny - y) || 1;
+      return [-(ny - y) / len, (nx - x) / len];
+    });
+    return pts.map(([x, y], i) => {
+      const a = normals[(i - 1 + n) % n];
+      const b = normals[i];
+      const bx = a[0] + b[0];
+      const by = a[1] + b[1];
+      const bl = Math.hypot(bx, by);
+      if (bl < 1e-6) return [x + a[0] * d, y + a[1] * d];
+      const ux = bx / bl;
+      const uy = by / bl;
+      const cos = a[0] * ux + a[1] * uy;
+      const k = cos > 1e-6 ? d / cos : d;
+      return [x + ux * k, y + uy * k];
+    });
+  }
+
+  /** Form (square / circle / triangle) centered on the anchor; crisp edges unless rotated. */
+  function paintForm(ctx, F, s, rotated, grow) {
+    const w = F.width * s;
+    const h = F.height * s;
+    const crisp = F.type !== 'square' || !rotated;
+    const x0 = crisp ? Math.round(-w / 2) : -w / 2;
+    const y0 = crisp ? Math.round(-h / 2) : -h / 2;
+    ctx.beginPath();
+    if (F.type === 'circle') {
+      ctx.ellipse(x0 + w / 2, y0 + h / 2, w / 2 + grow, h / 2 + grow, 0, 0, Math.PI * 2);
+    } else if (F.type === 'triangle') {
+      const pts = [[x0 + w / 2, y0], [x0, y0 + h], [x0 + w, y0 + h]];
+      polygon(ctx, grow ? expandTriangle(pts, grow) : pts);
+    } else {
+      const r = F.corner > 0 ? Math.min(F.corner * s, w / 2, h / 2) + grow : 0;
+      ctx.roundRect(x0 - grow, y0 - grow, w + grow * 2, h + grow * 2, r);
+    }
+    ctx.fill();
+  }
+
+  const requestedFonts = new Set();
+
+  /** Canvas text needs the web font loaded; load once and re-render through the asset listener. */
+  function ensureFont(font) {
+    if (typeof document === 'undefined' || !document.fonts || requestedFonts.has(font)) return;
+    requestedFonts.add(font);
+    if (document.fonts.check(font)) return;
+    document.fonts.load(font).then(
+      () => imageListener && imageListener(),
+      (err) => console.warn('crosshair font failed to load', err),
+    );
+  }
+
+  /** Text pass (fill, or outline stroke 2·grow wide). Circle layout runs clockwise from the left, like Y's text path. */
+  function paintText(ctx, T, s, grow) {
+    const font = `${T.bold ? 700 : 400} ${T.size * s}px ${FONT_FAMILY}`;
+    ensureFont(font);
+    ctx.font = font;
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = grow * 2;
+    const draw = (str, x, y) => (grow ? ctx.strokeText(str, x, y) : ctx.fillText(str, x, y));
+    ctx.textAlign = 'center';
+    if (T.layout !== 'circle') {
+      ctx.textBaseline = 'middle';
+      if ('letterSpacing' in ctx) ctx.letterSpacing = `${T.spacing * s}px`;
+      draw(T.value, 0, 0);
+      return;
+    }
+    ctx.textBaseline = 'alphabetic';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    const r = T.radius * s;
+    let along = 0;
+    for (const ch of T.value) {
+      const w = ctx.measureText(ch).width;
+      const theta = Math.PI + (along + w / 2) / r;
+      ctx.save();
+      ctx.translate(r * Math.cos(theta), r * Math.sin(theta));
+      ctx.rotate(theta + Math.PI / 2);
+      draw(ch, 0, 0);
+      ctx.restore();
+      along += w + T.spacing * s;
+    }
+  }
+
+  /**
+   * Form / text layer: fill painted opaque, outline (fill cut out) composited under it, each with
+   * its own opacity and blur — same scheme as the crosshair parts.
+   */
+  function drawFilledLayer(ctx, l, x, y, part, paint) {
+    const { width: w, height: h } = ctx.canvas;
+    const ax = Math.floor(x);
+    const ay = Math.floor(y);
+    const fc = scratchCtx(SLOT.lines, w, h);
+    fc.fillStyle = part.color;
+    fc.strokeStyle = part.color;
+    withFrame(fc, ax, ay, 0, l.rotation, (f) => paint(f, 0));
+    if (l.outline.enabled && l.outline.opacity > 0) {
+      const oc = scratchCtx(SLOT.outline, w, h);
+      oc.fillStyle = l.outline.color;
+      oc.strokeStyle = l.outline.color;
+      withFrame(oc, ax, ay, 0, l.rotation, (f) => paint(f, l.outline.thickness));
+      oc.globalCompositeOperation = 'destination-out';
+      oc.drawImage(fc.canvas, 0, 0);
+      composite(ctx, oc.canvas, l.outline.opacity, l.outline.blur);
+    }
+    composite(ctx, fc.canvas, part.opacity, part.blur);
+  }
+
+  /** Pixel drawing: DRAW_SIZE² image, nearest-neighbour scaled, centered on the anchor. */
+  function drawDrawLayer(ctx, l, x, y, s) {
+    const img = getImage(l.draw.src);
+    if (!img || l.draw.opacity <= 0) return;
+    const size = DRAW_SIZE * s;
+    ctx.save();
+    ctx.globalAlpha = l.draw.opacity;
+    if (l.draw.blur) ctx.filter = `blur(${l.draw.blur}px)`;
+    ctx.imageSmoothingEnabled = false;
+    withFrame(ctx, Math.floor(x), Math.floor(y), 0, l.rotation, (c) => c.drawImage(img, -size / 2, -size / 2, size, size));
+    ctx.restore();
+  }
+
+  function drawLayer(ctx, l, x, y, s) {
+    switch (l.kind) {
+      case 'image': return drawImageLayer(ctx, l, x, y, s);
+      case 'draw': return drawDrawLayer(ctx, l, x, y, s);
+      case 'form': return drawFilledLayer(ctx, l, x, y, l.form, (c, grow) => paintForm(c, l.form, s, !!l.rotation, grow));
+      case 'text': return l.text.value && drawFilledLayer(ctx, l, x, y, l.text, (c, grow) => paintText(c, l.text, s, grow));
+      default: return drawShapeLayer(ctx, l, x, y, s);
+    }
+  }
+
   /**
    * Render crosshair centered on (cx, cy) in physical pixel space.
    * @param {CanvasRenderingContext2D} ctx
@@ -754,9 +1112,7 @@
       const l = firedLayer(layer, (opts.fire && opts.fire[i]) || 0);
       const x = cx + l.offsetX * g;
       const y = cy + l.offsetY * g;
-      const s = l.scale * g;
-      if (l.kind === 'image') drawImageLayer(ctx, l, x, y, s);
-      else drawShapeLayer(ctx, l, x, y, s);
+      drawLayer(ctx, l, x, y, l.scale * g);
     });
   }
 
@@ -862,7 +1218,7 @@
     else layers = upgradeLegacy(prefix === 'CZ2-' ? { layers: Array.isArray(parsed) ? parsed : [] } : parsed);
     const ch = sanitizeCrosshair({ version: SCHEMA_VERSION, layers });
     ch.layers.forEach((l) => {
-      l.kind = 'shape';
+      if (l.kind === 'image') l.kind = 'shape'; // images are never shared
       l.image.src = '';
     });
     return ch;
@@ -967,6 +1323,10 @@
     SHARE_PREFIX,
     LINE_SHAPES,
     DOT_SHAPES,
+    FORM_TYPES,
+    TEXT_LAYOUTS,
+    LAYER_KINDS,
+    DRAW_SIZE,
     sanitizeLayer,
     sanitizeCrosshair,
     crosshairExtent,
@@ -974,6 +1334,7 @@
     drawCrosshair,
     layerBounds,
     onImageLoaded,
+    primeImage,
     FireAnimator,
     firedLayer,
     hasFiring,

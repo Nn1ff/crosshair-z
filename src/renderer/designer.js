@@ -76,6 +76,11 @@
     }
   }
 
+  const LINE_SHAPE_LABELS = { rectangle: 'line', triangle: 'triangle', chevronIn: 'chevron in', chevronOut: 'chevron out', arc: 'arc', tShape: 'T' };
+  /** Layer type chips; "shape" in the data is the classic crosshair, "form" a plain geometric shape. */
+  const KIND_LABELS = { shape: 'crosshair', form: 'shape', text: 'text', draw: 'draw', image: 'image' };
+  const DRAW_TOOLS = ['pen', 'eraser', 'move'];
+
   /** Property panel definition. `layer` = selected layer. */
   const SECTIONS = [
     { id: 'image', title: 'Image', tab: 'design', showIf: (l) => l.kind === 'image', fields: [
@@ -89,10 +94,48 @@
         { k: 'num', path: 'image.blur', label: 'Blur', step: 0.5 },
       ] },
     ] },
+    { id: 'form', title: 'Shape', tab: 'design', showIf: (l) => l.kind === 'form', fields: [
+      { k: 'color', path: 'form.color', alpha: 'form.opacity', label: 'Color' },
+      { k: 'opts', path: 'form.type', label: 'Type', values: C.FORM_TYPES },
+      { k: 'pair', items: [
+        { k: 'num', path: 'form.width', label: 'Width' },
+        { k: 'num', path: 'form.height', label: 'Height' },
+      ] },
+      { k: 'pair', items: [
+        { k: 'num', path: 'rotation', label: 'Rotation' },
+        { k: 'num', path: 'form.corner', label: 'Corner', showIf: (l) => l.form.type === 'square' },
+      ] },
+      { k: 'pair', items: [{ k: 'num', path: 'form.blur', label: 'Blur', step: 0.5 }] },
+    ] },
+    { id: 'text', title: 'Text', tab: 'design', showIf: (l) => l.kind === 'text', fields: [
+      { k: 'text' },
+      { k: 'color', path: 'text.color', alpha: 'text.opacity', label: 'Color' },
+      { k: 'opts', path: 'text.layout', label: 'Layout', values: C.TEXT_LAYOUTS },
+      { k: 'pair', items: [
+        { k: 'num', path: 'text.size', label: 'Size' },
+        { k: 'num', path: 'text.spacing', label: 'Spacing' },
+      ] },
+      { k: 'pair', items: [
+        { k: 'num', path: 'rotation', label: 'Rotation' },
+        { k: 'num', path: 'text.radius', label: 'Radius', showIf: (l) => l.text.layout === 'circle' },
+      ] },
+      { k: 'pair', items: [
+        { k: 'num', path: 'text.blur', label: 'Blur', step: 0.5 },
+        { k: 'bool', path: 'text.bold', label: 'Bold' },
+      ] },
+    ] },
+    { id: 'draw', title: 'Drawing', tab: 'design', showIf: (l) => l.kind === 'draw', fields: [
+      { k: 'drawtools' },
+      { k: 'color', path: 'draw.color', alpha: 'draw.opacity', label: 'Pen color' },
+      { k: 'pair', items: [
+        { k: 'num', path: 'rotation', label: 'Rotation' },
+        { k: 'num', path: 'draw.blur', label: 'Blur', step: 0.5 },
+      ] },
+    ] },
     { id: 'lines', title: 'Lines', tab: 'design', toggle: 'lines.enabled', showIf: (l) => l.kind === 'shape', fields: [
       { k: 'color', path: 'lines.color', alpha: 'lines.opacity', label: 'Color' },
-      { k: 'arms' },
-      { k: 'opts', path: 'lines.shape', label: 'Shape', values: C.LINE_SHAPES },
+      { k: 'opts', path: 'lines.shape', label: 'Shape', values: C.LINE_SHAPES, labels: LINE_SHAPE_LABELS },
+      { k: 'arms', showIf: (l) => l.lines.count === 4 },
       { k: 'pair', items: [
         { k: 'num', path: 'lines.length', label: 'Length' },
         { k: 'num', path: 'lines.thickness', label: 'Thickness' },
@@ -101,7 +144,18 @@
         { k: 'num', path: 'lines.offset', label: 'Gap' },
         { k: 'num', path: 'rotation', label: 'Rotation' },
       ] },
-      { k: 'pair', items: [{ k: 'num', path: 'lines.blur', label: 'Blur', step: 0.5 }] },
+      { k: 'pair', items: [
+        { k: 'num', path: 'lines.count', label: 'Arms' },
+        { k: 'num', path: 'lines.blur', label: 'Blur', step: 0.5 },
+      ] },
+      { k: 'pair', showIf: (l) => l.lines.shape.startsWith('chevron'), items: [
+        { k: 'num', path: 'lines.angle', label: 'Angle' },
+        { k: 'pct', path: 'lines.roundness', label: 'Round' },
+      ] },
+      { k: 'pair', showIf: (l) => l.lines.shape === 'tShape', items: [
+        { k: 'num', path: 'lines.capLength', label: 'Cap length' },
+        { k: 'num', path: 'lines.capThickness', label: 'Cap width' },
+      ] },
     ] },
     { id: 'dot', title: 'Center dot', tab: 'design', toggle: 'dot.enabled', showIf: (l) => l.kind === 'shape', fields: [
       { k: 'dotcolor' },
@@ -115,7 +169,7 @@
         { k: 'num', path: 'dot.thickness', label: 'Ring width', showIf: (l) => l.dot.shape === 'ring' },
       ] },
     ] },
-    { id: 'outline', title: 'Outline', tab: 'design', toggle: 'outline.enabled', showIf: (l) => l.kind === 'shape', fields: [
+    { id: 'outline', title: 'Outline', tab: 'design', toggle: 'outline.enabled', showIf: (l) => ['shape', 'form', 'text'].includes(l.kind), fields: [
       { k: 'color', path: 'outline.color', alpha: 'outline.opacity', label: 'Color' },
       { k: 'pair', items: [
         { k: 'num', path: 'outline.thickness', label: 'Thickness' },
@@ -155,6 +209,8 @@
       raf: 0,
       ts: 0,
       drag: null,
+      paint: null, // active pen/eraser stroke on a drawing layer
+      drawTool: 'pen',
       bounds: null,
       prefs: loadPrefs(),
     };
@@ -439,10 +495,16 @@
       }, { passive: false });
       canvas.addEventListener('pointerdown', (e) => {
         canvas.setPointerCapture(e.pointerId);
+        if (layer().kind === 'draw' && st.drawTool !== 'move') {
+          st.paint = { last: null };
+          paintAt(e);
+          return;
+        }
         st.drag = { x: e.clientX, y: e.clientY, ox: layer().offsetX, oy: layer().offsetY };
         canvas.classList.add('dragging');
       });
       canvas.addEventListener('pointermove', (e) => {
+        if (st.paint) return paintAt(e);
         if (!st.drag) return;
         const dx = Math.round((e.clientX - st.drag.x) / st.zoom);
         const dy = Math.round((e.clientY - st.drag.y) / st.zoom);
@@ -454,11 +516,88 @@
       });
       const end = () => {
         st.drag = null;
+        st.paint = null;
         canvas.classList.remove('dragging');
       };
       canvas.addEventListener('pointerup', end);
       canvas.addEventListener('pointercancel', end);
       new ResizeObserver(resize).observe(canvas);
+    }
+
+    // ---------- drawing layers ----------
+
+    /** Editable DRAW_SIZE² bitmap of the selected drawing layer (re-decoded when its data URL changes). */
+    function drawBitmap(l) {
+      if (st.drawBuf && st.drawBuf.src === l.draw.src) return st.drawBuf.canvas;
+      const c = new OffscreenCanvas(C.DRAW_SIZE, C.DRAW_SIZE);
+      st.drawBuf = { src: l.draw.src, canvas: c, ready: !l.draw.src };
+      if (l.draw.src) {
+        const img = new Image();
+        img.onload = () => {
+          c.getContext('2d').drawImage(img, 0, 0);
+          st.drawBuf.ready = true;
+        };
+        img.onerror = () => console.warn('drawing could not be decoded');
+        img.src = l.draw.src;
+      }
+      return c;
+    }
+
+    /** Stage pointer → pixel of the drawing (undoing the layer's position, scale and rotation). */
+    function drawPixel(e, l) {
+      const g = geometry();
+      const r = canvas.getBoundingClientRect();
+      const sx = ((e.clientX - r.left) * g.dpr - g.ox) / g.z;
+      const sy = ((e.clientY - r.top) * g.dpr - g.oy) / g.z;
+      const gs = opts.getScale();
+      const s = l.scale * gs;
+      let dx = sx - Math.floor(g.cx + l.offsetX * gs);
+      let dy = sy - Math.floor(g.cy + l.offsetY * gs);
+      if (l.rotation) {
+        const a = (-l.rotation * Math.PI) / 180;
+        [dx, dy] = [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)];
+      }
+      return [Math.floor(dx / s + C.DRAW_SIZE / 2), Math.floor(dy / s + C.DRAW_SIZE / 2)];
+    }
+
+    /** Pen / eraser stroke; gaps between pointer events are filled along a line. */
+    function paintAt(e) {
+      const l = layer();
+      const bmp = drawBitmap(l);
+      if (!st.drawBuf.ready) return; // existing drawing still decoding
+      const [x, y] = drawPixel(e, l);
+      const [x0, y0] = st.paint.last || [x, y];
+      st.paint.last = [x, y];
+      const b = bmp.getContext('2d');
+      b.fillStyle = l.draw.color;
+      const steps = Math.max(Math.abs(x - x0), Math.abs(y - y0), 1);
+      for (let i = 0; i <= steps; i++) {
+        const px = Math.round(x0 + ((x - x0) * i) / steps);
+        const py = Math.round(y0 + ((y - y0) * i) / steps);
+        if (px < 0 || py < 0 || px >= C.DRAW_SIZE || py >= C.DRAW_SIZE) continue;
+        if (st.drawTool === 'eraser') b.clearRect(px, py, 1, 1);
+        else b.fillRect(px, py, 1, 1);
+      }
+      commitDrawing(l, bmp);
+    }
+
+    function commitDrawing(l, bmp) {
+      const c = el('canvas', { width: C.DRAW_SIZE, height: C.DRAW_SIZE });
+      c.getContext('2d').drawImage(bmp, 0, 0);
+      const src = c.toDataURL('image/png');
+      if (src === l.draw.src) return;
+      C.primeImage(src, bmp);
+      l.draw.src = src;
+      st.drawBuf.src = src;
+      refresh(false);
+    }
+
+    function clearDrawing() {
+      const l = layer();
+      if (l.kind !== 'draw' || !l.draw.src) return;
+      st.drawBuf = null;
+      l.draw.src = '';
+      refresh(false);
     }
 
     // ---------- layers panel ----------
@@ -716,8 +855,32 @@
       return el('div', { class: 'pf full' }, el('span', { class: 'pf-label' }, 'Color'), el('div', { class: 'row-tight' }, same, own, picker));
     }
 
+    function textField(item) {
+      const input = el('input', { type: 'text', class: 'dz-text-input', maxlength: 40, spellcheck: 'false', placeholder: 'Text' });
+      input.addEventListener('input', () => setValue(item.path, input.value));
+      input.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === 'Escape') && input.blur());
+      st.syncers.push(() => {
+        if (document.activeElement !== input) input.value = getPath(layer(), item.path);
+      });
+      return el('div', { class: 'pf full' }, el('span', { class: 'pf-label' }, item.label), input);
+    }
+
+    function boolField(item) {
+      const btn = el('button', { class: 'chipbtn', onclick: () => setValue(item.path, !getPath(layer(), item.path)) }, item.label);
+      st.syncers.push(() => btn.classList.toggle('on', !!getPath(layer(), item.path)));
+      return el('div', { class: 'pf' }, el('span', { class: 'pf-label' }, ' '), el('div', { class: 'row-tight' }, btn));
+    }
+
+    function drawToolsField() {
+      const btns = DRAW_TOOLS.map((t) => el('button', { class: 'chipbtn', onclick: () => { st.drawTool = t; sync(); } }, t));
+      const clear = el('button', { class: 'chipbtn', title: 'Erase the whole drawing', onclick: clearDrawing }, 'clear');
+      st.syncers.push(() => btns.forEach((b, i) => b.classList.toggle('on', st.drawTool === DRAW_TOOLS[i])));
+      return el('div', { class: 'pf full' }, el('span', { class: 'pf-label' }, 'Tool'), el('div', { class: 'row-tight' }, ...btns, clear),
+        el('p', { class: 'pf-note' }, `Paint on the stage, one pixel at a time (${C.DRAW_SIZE}×${C.DRAW_SIZE} canvas).`));
+    }
+
     function optsField(item) {
-      const btns = item.values.map((v) => el('button', { class: 'chipbtn', onclick: () => setValue(item.path, v) }, v));
+      const btns = item.values.map((v) => el('button', { class: 'chipbtn', onclick: () => setValue(item.path, v) }, (item.labels && item.labels[v]) || v));
       st.syncers.push(() => btns.forEach((b, i) => b.classList.toggle('on', getPath(layer(), item.path) === item.values[i])));
       return el('div', { class: 'pf' }, el('span', { class: 'pf-label' }, item.label), el('div', { class: 'row-tight' }, ...btns));
     }
@@ -762,6 +925,9 @@
         case 'color': return colorField(item);
         case 'dotcolor': return dotColorField();
         case 'opts': return optsField(item);
+        case 'text': return textField(item.path ? item : { path: 'text.value', label: 'Text' });
+        case 'bool': return boolField(item);
+        case 'drawtools': return drawToolsField();
         case 'arms': return armsField();
         case 'image': return imageField();
         case 'testfire': return testFireField();
@@ -808,7 +974,7 @@
         numField({ path: 'offsetX', label: 'X' }),
         numField({ path: 'offsetY', label: 'Y' }));
       const scale = el('div', { class: 'pf-pair' }, numField({ path: 'scale', label: 'Scale', step: 0.1 }));
-      const kind = optsField({ path: 'kind', label: 'Type', values: ['shape', 'image'] });
+      const kind = optsField({ path: 'kind', label: 'Type', values: C.LAYER_KINDS, labels: KIND_LABELS });
       const node = el('section', { class: 'sec open transform' }, el('div', { class: 'sec-body' }, xy, scale, kind));
       st.syncers.push(() => node.classList.toggle('hidden', st.tab !== 'design'));
       return node;

@@ -3,10 +3,10 @@
 /**
  * Converts crosshairs saved by Crosshair X / Y (user's local JSON data files) into Crosshair Z format.
  * Works on the documented-by-example data shape only:
- *   { name?, pos:{x,y}, model:[{ type:'model', line, dot, outline, position, layer:{size}, firingOptions }] }
- * Z layers use the same model (separate line / dot / outline parts, total-gap offset), so most
- * values map 1:1. Unsupported parts (custom images, text, chevron/arc arms, staged animations)
- * are skipped or simplified with a warning.
+ *   { name?, pos:{x,y}, model:[{ type:'model'|'shape'|'text'|'draw'|'image', …, position, layer:{size} }] }
+ * Z layers use the same model (separate line / dot / outline parts, total-gap offset, the same arm
+ * shapes and layer types), so most values map 1:1. Unsupported details (anchors, angled arc caps,
+ * staged animations) are simplified with a warning.
  */
 const core = require('./crosshair-core');
 
@@ -56,6 +56,80 @@ function convertFiring(fo) {
   return { enabled: true, spread: Math.abs(Math.round(off)), kick: 0, speed: Math.max(20, num(f.duration, DEFAULT_ANIM_MS) || DEFAULT_ANIM_MS) };
 }
 
+function clampInt(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, Math.round(v)));
+}
+
+/** Y draws shape/text outlines only when both thickness and opacity are set. */
+function partOutline(outline) {
+  const o = obj(outline);
+  return {
+    enabled: num(o.thickness) > 0 && num(o.opacity) > 0,
+    thickness: Math.max(1, Math.round(num(o.thickness, 1))),
+    color: color(o.color, '#000000'),
+    opacity: num(o.opacity, 1),
+    blur: num(o.blur),
+  };
+}
+
+const IMAGE_DATA_RE = /^data:image\/png;base64,/;
+const ANY_IMAGE_RE = /^data:image\/(png|jpeg|gif|webp);base64,/;
+
+/** Crosshair X / Y non-model layer types → Z layer fields (position/scale added by the caller). */
+const OTHER_TYPES = {
+  shape(m, warnings) {
+    const anchor = obj(m.anchor);
+    if ((anchor.x && anchor.x !== 'center') || (anchor.y && anchor.y !== 'center')) warnings.push('shape anchor treated as center');
+    return {
+      kind: 'form',
+      rotation: normAngle(num(m.rotation)),
+      form: {
+        type: core.FORM_TYPES.includes(m.shape) ? m.shape : 'square',
+        width: Math.round(num(m.width, 20)),
+        height: Math.round(num(m.height, 20)),
+        corner: Math.round(num(m.cornerRadius)),
+        color: color(m.color, '#00ff00'),
+        opacity: num(m.opacity, 1),
+        blur: num(m.blur),
+      },
+      outline: partOutline(m.outline),
+    };
+  },
+  text(m, warnings) {
+    if (m.repeatToFill) warnings.push('repeated circle text drawn once');
+    return {
+      kind: 'text',
+      rotation: normAngle(num(m.rotation)),
+      text: {
+        value: typeof m.text === 'string' ? m.text : '',
+        size: Math.round(num(m.fontSize, 14)),
+        bold: num(m.fontWeight, 700) >= 600,
+        spacing: Math.round(num(m.letterSpacing)),
+        layout: m.layout === 'circle' ? 'circle' : 'line',
+        radius: Math.round(num(m.radius, 30)),
+        color: color(m.color, '#ffffff'),
+        opacity: num(m.opacity, 1),
+        blur: num(m.blur),
+      },
+      outline: partOutline(m.outline),
+    };
+  },
+  image(m) {
+    if (typeof m.image !== 'string' || !ANY_IMAGE_RE.test(m.image)) return null;
+    // Z sizes images by their longest edge
+    const size = Math.round(Math.max(num(m.width, 64), num(m.height, 64)));
+    return { kind: 'image', rotation: normAngle(num(m.rotation)), image: { src: m.image, size, opacity: num(m.opacity, 1), blur: 0 } };
+  },
+  draw(m, warnings) {
+    if (typeof m.image !== 'string' || !IMAGE_DATA_RE.test(m.image)) return null;
+    const w = num(m.width, core.DRAW_SIZE);
+    if (w <= 0) return null;
+    if (num(m.height, w) !== w) warnings.push('non-square drawing stretched to square');
+    // Z drawings are DRAW_SIZE px wide; other sizes scale the layer instead
+    return { kind: 'draw', scaleMul: w / core.DRAW_SIZE, draw: { src: m.image, color: '#ffffff', opacity: num(m.opacity, 1), blur: 0 } };
+  },
+};
+
 /**
  * Convert one Crosshair X model entry into 0–1 Z layer.
  * @returns {{layers: object[], warnings: string[]}}
@@ -67,11 +141,20 @@ function convertModel(m, index, pos) {
   const outline = obj(m.outline);
   const position = obj(m.position);
   const scale = num(obj(m.layer).size, 1);
-  if (m.type && m.type !== 'model') {
-    warnings.push(`layer type "${m.type}" not supported`);
-    return { layers: [], warnings };
-  }
   if (scale <= 0) return { layers: [], warnings };
+  if (m.type && m.type !== 'model') {
+    const convert = OTHER_TYPES[m.type];
+    if (!convert) {
+      warnings.push(`layer type "${m.type}" not supported`);
+      return { layers: [], warnings };
+    }
+    const converted = convert(m, warnings);
+    if (!converted) return { layers: [], warnings };
+    const { scaleMul = 1, ...fields } = converted;
+    const offsetX = Math.round(num(position.x) + num(pos.x));
+    const offsetY = Math.round(num(position.y) + num(pos.y));
+    return { layers: [{ name: `Layer ${index + 1}`, visible: true, offsetX, offsetY, scale: scale * scaleMul, ...fields }], warnings };
+  }
   const visible = Array.isArray(line.visible) ? line.visible : ARMS;
 
   const thickness = Math.round(num(line.thickness, 1));
@@ -85,7 +168,9 @@ function convertModel(m, index, pos) {
     warnings.push(`line shape "${shape}" drawn as rectangle`);
     shape = 'rectangle';
   }
-  if (linesOn && line.armCount !== undefined && line.armCount !== 4) warnings.push('radial arms drawn as 4 arms');
+  const count = clampInt(num(line.armCount, 4), 3, 8);
+  if (linesOn && count !== 4 && Array.isArray(line.visibleArms)) warnings.push('hidden radial arms are shown');
+  if (linesOn && shape === 'arc' && line.capStyle === 'angled') warnings.push('angled arc caps drawn flat');
   const dotShape = core.DOT_SHAPES.includes(dot.shape) ? dot.shape : 'circle';
   if (num(scale, 1) > 8 || scale < 0.25) warnings.push('layer size clamped');
 
@@ -110,6 +195,11 @@ function convertModel(m, index, pos) {
       bottom: visible.includes('bottom'),
       left: visible.includes('left'),
       right: visible.includes('right'),
+      count,
+      angle: num(line.angle, 60),
+      roundness: num(line.roundness, 0),
+      capLength: num(line.capLength, 8),
+      capThickness: num(line.capThickness, 2),
     },
     dot: {
       enabled: dotOn,
@@ -161,7 +251,14 @@ function colorName(hex) {
 
 /** Short human name from the first visible layer, e.g. "Green cross", "Red dot", "White T". */
 function describe(ch) {
-  const l = ch.layers.find((x) => x.visible && (x.lines.enabled || x.dot.enabled)) || ch.layers[0];
+  const shapes = ch.layers.filter((x) => x.visible && x.kind === 'shape' && (x.lines.enabled || x.dot.enabled));
+  if (!shapes.length) {
+    const other = ch.layers.find((x) => x.visible && x.kind !== 'shape') || ch.layers[0];
+    if (other.kind === 'text') return `${capitalize(colorName(other.text.color))} text`;
+    if (other.kind === 'form') return `${capitalize(colorName(other.form.color))} ${other.form.type}`;
+    if (other.kind === 'draw') return 'Drawing';
+  }
+  const l = shapes[0] || ch.layers[0];
   const L = l.lines;
   const arms = ARMS.filter((a) => L[a]).length;
   let shape = l.dot.shape === 'ring' ? 'circle' : 'dot';
@@ -172,8 +269,11 @@ function describe(ch) {
     if (l.dot.enabled) shape += ' with dot';
   }
   const dotColor = l.dot.useMainColor ? L.color : l.dot.color;
-  const name = `${colorName(L.enabled ? L.color : dotColor)} ${shape}`;
-  return name.charAt(0).toUpperCase() + name.slice(1);
+  return capitalize(`${colorName(L.enabled ? L.color : dotColor)} ${shape}`);
+}
+
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /**
