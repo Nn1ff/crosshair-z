@@ -1,0 +1,77 @@
+/* UI motion adapted from the local Crosshair Y renderer: pageEnter, fadeInGrid,
+   tutorial-anim-card-in, alp-panel-in and section-slide-in. Timings and curves follow Y.
+   Uses the individual `translate`/`scale` properties where JS or base CSS already owns `transform`. */
+:root {
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-soft: cubic-bezier(.25, .46, .45, .94);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --t-fast: .15s;
+  --t-med: .3s;
+}
+
+@keyframes cz-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cz-rise { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
+@keyframes cz-rise-lg { from { opacity: 0; translate: 0 20px; } to { opacity: 1; translate: 0 0; } }
+@keyframes cz-drop { from { opacity: 0; translate: 0 -6px; } to { opacity: 1; translate: 0 0; } }
+@keyframes cz-pop { from { opacity: 0; scale: .95; translate: 4px 0; } to { opacity: 1; scale: 1; translate: 0 0; } }
+@keyframes cz-card-in { from { opacity: 0; translate: 0 14px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@keyframes cz-underline { from { scale: 0 1; } to { scale: 1 1; } }
+@keyframes cz-jelly { 0%, 100% { scale: 1; } 30% { scale: 1.15; } 60% { scale: .95; } }
+
+/* Page switch: pages toggle `display`, so the animation replays each time one is shown */
+.page:not(.hidden) { animation: cz-fade 120ms ease-out; }
+.page:not(.hidden) .card-grid,
+.page:not(.hidden) .option-grid { animation: cz-fade var(--t-med) ease; }
+
+/* Discover: staggered entrance */
+.page:not(.hidden) .quick-actions { animation: cz-rise-lg .6s var(--ease-soft) both; }
+.page:not(.hidden) .discover-panels > article { animation: cz-card-in .36s var(--ease-out) both; }
+.page:not(.hidden) .discover-panels > article:nth-child(1) { animation-delay: .18s; }
+.page:not(.hidden) .featured-title,
+.page:not(.hidden) .discover-wrap .card-grid { animation: cz-rise-lg .6s var(--ease-soft) .32s both; }
+
+/* Tabs: underline grows in when a tab strip is (re)built */
+.tab.active::after { animation: cz-underline .2s var(--ease-out); }
+
+/* Interactive surfaces: uniform quick transitions */
+.rail-btn, .tab, .side-item, .option, .dz-layer, .text-action,
+.quick-actions button, .mini-seg button, .dock-btn, .tb-ico {
+  transition: color var(--t-fast) ease, background-color var(--t-fast) ease, border-color var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+.btn { transition: filter var(--t-fast) ease, background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease, scale .1s ease; }
+.btn:active:not(:disabled), .quick-actions button:active, .dock-btn:active { scale: .97; }
+.quick-actions button, .dock-btn { transition-property: color, background-color, border-color, box-shadow, scale; }
+
+/* Power toggle: jelly bounce when switched on */
+.power input:checked + .power-btn { animation: cz-jelly .4s ease; }
+.power-btn { transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast), box-shadow .2s ease; }
+
+/* Disclosure content drops in */
+.more[open] > :not(summary),
+.sec.open:not(.hidden):not(.transform) > .sec-body { animation: cz-drop var(--t-fast) ease; }
+.more summary svg, .sec-chev { transition: transform .2s var(--ease-out); }
+
+/* Designer floating panels pop in when the page appears */
+.page:not(.hidden) .dz-layers,
+.page:not(.hidden) .dz-dock,
+.page:not(.hidden) .dz-actual { animation: cz-pop .15s var(--ease-out) backwards; }
+.page:not(.hidden) .dz-layers { transform-origin: left center; }
+.page:not(.hidden) .dz-actual { transform-origin: right bottom; }
+
+/* Match Y's 150ms control feedback without animating layout or canvas coordinates. */
+.sec-head, .sec-toggle, .pf-btn, .dz-tab {
+  transition: color .15s ease, background-color .15s ease, border-color .15s ease;
+}
+.check input::after { transition: transform .15s ease-in-out, background-color .15s ease; }
+.card { transition: box-shadow .2s ease-in-out, border-color .2s ease-in-out, transform .15s ease-in-out; }
+
+/* Tooltip: slight drop + fade (JS owns left/top) */
+.tip { translate: 0 -4px; transition: opacity .12s ease-out, translate .2s ease-out; }
+.tip.show { translate: 0 0; }
+
+/* Toast: springy slide-up */
+.toast { transition: opacity .2s ease, transform .35s var(--ease-spring); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

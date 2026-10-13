@@ -5,8 +5,9 @@
   const C = CrosshairCore;
   const { el, icon, toast, call } = CZUI;
   const PUSH_DEBOUNCE_MS = 40;
-  const CARD_W = 72;
-  const CARD_H = 54;
+  // Card preview buffer in device pixels; drawn 1:1 like in-game (no upscaling).
+  const CARD_W = 128;
+  const CARD_H = 96;
   const MAX_OFFSET = 4000;
   const HOTKEY_LABELS = {
     toggle: 'Show / hide',
@@ -32,7 +33,7 @@
 
   /** Rail groups → top tabs. */
   const GROUPS = {
-    crosshairs: [['library', 'Library'], ['saved', 'Saved'], ['import', 'Import'], ['share', 'Share']],
+    crosshairs: [['discover', 'Discover'], ['library', 'Browse'], ['saved', 'Saved'], ['import', 'Import'], ['share', 'Share']],
     designer: [['designer', 'Designer']],
     keys: [['hotkeys', 'Hotkeys'], ['toggle', 'Toggle']],
     display: [['position', 'Position and size']],
@@ -81,13 +82,21 @@
     C.drawCrosshair(ctx, ch, w / 2, h / 2, { scale: fit });
   }
 
+  /** Card preview: true screen size, CSS box = buffer / devicePixelRatio so 1 crosshair px = 1 screen px. */
+  function drawCardThumb(canvas, ch) {
+    drawThumb(canvas, ch, CARD_W, CARD_H);
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = `${CARD_W / dpr}px`;
+    canvas.style.height = `${CARD_H / dpr}px`;
+  }
+
   /**
    * Crosshair card: preview "slide", name, optional tag/extra row and bookmark button.
    * @param {{onMark?: () => void, marked?: boolean}} [opts]
    */
   function card(ch, name, tag, active, extra, opts = {}) {
     const canvas = el('canvas');
-    drawThumb(canvas, ch, CARD_W, CARD_H);
+    drawCardThumb(canvas, ch);
     const li = el('li', { class: 'card' + (active ? ' active' : ''), title: name }, el('div', { class: 'slide' }, canvas),
       el('div', { class: 'meta' }, el('span', { class: 'name' }, name), tag ? el('span', { class: 'tag' }, tag) : null), extra);
     if (opts.onMark) {
@@ -160,7 +169,7 @@
     const prints = savedPrints();
     $('presetList').replaceChildren(...shown.map((p) => {
       const marked = prints.has(JSON.stringify(p.crosshair));
-      const li = card(p.crosshair, p.name, ui.category === 'All' ? p.category : '', false, null, {
+      const li = card(p.crosshair, p.name, ui.category === 'All' && p.category !== 'Starter pack' ? p.category : '', false, null, {
         marked,
         onMark: () => saveProfile(p.name, p.crosshair),
       });
@@ -213,10 +222,11 @@
 
   function onDesignerChange(draft) {
     ui.draft = draft;
+    ui.designer.setStatus('saving');
     schedulePush();
     updateShare();
     const li = $('profileList').querySelector('li.active canvas');
-    if (li) drawThumb(li, ui.draft, CARD_W, CARD_H);
+    if (li) drawCardThumb(li, ui.draft);
     drawThumb($('currentThumb'), ui.draft, 44, 44);
   }
 
@@ -229,7 +239,10 @@
     if (!ui.pushTimer) return;
     clearTimeout(ui.pushTimer);
     ui.pushTimer = null;
-    call('profile:update', { id: ui.draftId, crosshair: ui.draft });
+    call('profile:update', { id: ui.draftId, crosshair: ui.draft }).then((res) => {
+      // only report saved when nothing newer is queued; failures already toast via call()
+      if (res && !ui.pushTimer) ui.designer.setStatus('saved');
+    });
   }
 
   async function rename(name) {
@@ -259,11 +272,17 @@
       const n = Number(v);
       if (v !== '' && Number.isFinite(n)) set(n);
     };
-    range.addEventListener('input', () => commit(range.value));
+    // --p drives the filled part of the track (CSS gradient)
+    const paint = () => range.style.setProperty('--p', `${((range.value - spec.min) / (spec.max - spec.min)) * 100}%`);
+    range.addEventListener('input', () => {
+      paint();
+      commit(range.value);
+    });
     num.addEventListener('change', () => commit(num.value));
     ui.syncers.push(() => {
       const v = get();
       range.value = v;
+      paint();
       if (document.activeElement !== num) num.value = v;
     });
     return el('div', { class: 'ctrl' }, el('label', null, label), range, num);
@@ -512,9 +531,20 @@
   }
 
   function showPage(page) {
+    if (page === 'discover' && ui.config) {
+      drawThumb($('discoverPreview'), ui.draft || activeProfile().crosshair, 240, 100);
+      $('discoverName').textContent = activeProfile().name;
+      $('discoverCards').replaceChildren(...ui.presets.slice(0, 10).map(p => {
+        const item = card(p.crosshair, p.name, p.category, false);
+        item.addEventListener('click', () => createProfile(p.name, p.crosshair));
+        return item;
+      }));
+    }
     const group = groupOf(page);
     ui.lastPage[group] = page;
     document.querySelectorAll('.rail-btn').forEach((b) => b.classList.toggle('active', b.dataset.group === group));
+    // a section with a single page needs no tab strip (its page has its own header/toolbar)
+    document.querySelector('.shell').classList.toggle('single', GROUPS[group].length === 1);
     $('tabs').replaceChildren(...GROUPS[group].map(([p, label]) =>
       el('button', { class: 'tab' + (p === page ? ' active' : ''), role: 'tab', onclick: () => showPage(p) }, label)));
     document.querySelectorAll('.page').forEach((p) => p.classList.toggle('hidden', p.dataset.page !== page));
@@ -524,6 +554,7 @@
   }
 
   function wire() {
+    document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
     document.querySelectorAll('.rail-btn').forEach((b) => b.addEventListener('click', () => {
       const g = b.dataset.group;
       showPage(ui.lastPage[g] || GROUPS[g][0][0]);
@@ -532,7 +563,13 @@
       ui.search = e.target.value;
       renderPresets();
     });
-    window.czShowPage = showPage; // used by capture mode
+    // used by capture mode; "designer:light" also picks a stage background
+    window.czShowPage = (spec) => {
+      const [page, bg] = String(spec).split(":");
+      showPage(page);
+      const btn = bg && document.querySelector(`#dzBg [data-bg="${bg}"]`);
+      if (btn) btn.click();
+    };
     $('btnNew').addEventListener('click', () => createProfile('New Crosshair', C.DEFAULT_CROSSHAIR));
     $('btnDup').addEventListener('click', () => createProfile(activeProfile().name + ' copy', ui.draft));
     $('btnDel').addEventListener('click', deleteProfile);
@@ -600,7 +637,7 @@
     ui.runtime = res.runtime || {};
     ui.defaults = res.defaults || {};
     applyConfig(res.config, true);
-    showPage('library');
+    showPage('discover');
     loadMonitors();
     scanCx();
     const logPath = await call('log:path');

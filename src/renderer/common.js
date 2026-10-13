@@ -65,5 +65,81 @@
     return JSON.parse(JSON.stringify(o));
   }
 
+  // ---------- tooltips ----------
+  // Replaces native title tooltips app-wide: any element with title="Text (Ctrl+Z)" gets a styled tip,
+  // a trailing "(shortcut)" is shown as a key cap. Delegated, so elements created later work too.
+
+  const TIP_DELAY_MS = 380;
+  const TIP_GAP_PX = 8;
+  const SHORTCUT_RE = /^(.*\S)\s+\(((?:Ctrl|Shift|Alt|Del|Esc)[^)]{0,12}|[^\s)]{1,2})\)$/;
+
+  function initTooltips() {
+    const tip = el('div', { class: 'tip', id: 'czTooltip', role: 'tooltip' });
+    document.body.append(tip);
+    let target = null;
+    let timer = null;
+
+    const prepare = (node) => {
+      if (!node || !node.matches) return;
+      if (node.hasAttribute('title')) {
+        node.dataset.tip = node.getAttribute('title');
+        node.removeAttribute('title');
+      }
+      if (node.dataset.tip && !node.hasAttribute('aria-label') && !node.textContent.trim()) {
+        node.setAttribute('aria-label', node.dataset.tip);
+      }
+    };
+
+    const showFor = (node) => {
+      prepare(node);
+      if (!node || !node.dataset.tip || node === target) return;
+      hide();
+      target = node;
+      const m = SHORTCUT_RE.exec(node.dataset.tip);
+      tip.replaceChildren(m ? m[1] : node.dataset.tip, m ? el('kbd', null, m[2]) : '');
+      if (!node.hasAttribute('aria-describedby')) node.setAttribute('aria-describedby', tip.id);
+      timer = setTimeout(place, TIP_DELAY_MS);
+    };
+
+    const hide = () => {
+      clearTimeout(timer);
+      if (target && target.getAttribute('aria-describedby') === tip.id) target.removeAttribute('aria-describedby');
+      target = null;
+      tip.classList.remove('show');
+    };
+
+    const place = () => {
+      if (!target || !target.isConnected) return hide();
+      const r = target.getBoundingClientRect();
+      const t = tip.getBoundingClientRect();
+      const below = r.bottom + TIP_GAP_PX + t.height < window.innerHeight;
+      const x = Math.max(6, Math.min(window.innerWidth - t.width - 6, r.left + r.width / 2 - t.width / 2));
+      tip.style.left = `${Math.round(x)}px`;
+      tip.style.top = `${Math.round(below ? r.bottom + TIP_GAP_PX : r.top - TIP_GAP_PX - t.height)}px`;
+      tip.classList.add('show');
+    };
+
+    document.addEventListener('mouseover', (e) => {
+      const next = e.target.closest && e.target.closest('[title], [data-tip]');
+      if (next) showFor(next);
+    });
+    document.addEventListener('mouseout', (e) => {
+      if (target && target.contains(e.target) && !target.contains(e.relatedTarget)) hide();
+    });
+    document.addEventListener('focusin', (e) => {
+      const next = e.target.closest && e.target.closest('[title], [data-tip]');
+      if (next) showFor(next);
+    });
+    document.addEventListener('focusout', (e) => {
+      if (target && (e.target === target || target.contains(e.target)) && !target.contains(e.relatedTarget)) hide();
+    });
+    document.addEventListener('mousedown', hide, true);
+    document.addEventListener('scroll', hide, true);
+    window.addEventListener('blur', hide);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initTooltips);
+  else initTooltips();
+
   window.CZUI = { el, icon, getPath, setPath, toast, call, clone };
 })();

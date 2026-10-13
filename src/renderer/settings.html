@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'">
 <title>Crosshair Z</title>
 <link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="crosshair-y.css">
+<link rel="stylesheet" href="animations.css">
 </head>
 <body>
 <!-- Icon sprite (24px grid, 1.6 stroke). Referenced via <use href="#i-…">. -->
@@ -48,11 +50,17 @@
     <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M12 7V3M12 21v-4M7 12H3M21 12h-4"/><path d="M9 9l-2-2M15 9l2-2M9 15l-2 2M15 15l2 2"/></symbol>
     <symbol id="i-stack" viewBox="0 0 24 24"><path d="M12 4v6M9 7h6M12 14v1.5M10.5 18h3M11 21h2"/></symbol>
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6z"/></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M9.5 4.5v15"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 019.5 4.5a8 8 0 1010 10z"/></symbol>
+    <symbol id="i-mountain" viewBox="0 0 24 24"><path d="M2.5 19.5l6.5-10 4 6 2.5-3.5 6 7.5z"/></symbol>
   </defs>
 </svg>
 
 <header class="titlebar">
-  <div class="brand"><img src="../../assets/icon.png" alt=""><span>Crosshair <b>Z</b></span></div>
+  <div class="brand"><img src="../../assets/icon.png" alt=""><span>Crosshair <b>Z</b> <small>1.7</small></span></div>
   <div class="titlebar-right">
     <div class="equipped" title="Equipped crosshair">
       <canvas id="currentThumb" class="equipped-thumb"></canvas>
@@ -67,13 +75,13 @@
 </header>
 
 <div class="app">
-<nav class="rail" aria-label="Sections">
-  <button class="rail-btn active" data-group="crosshairs" title="Crosshairs"><svg><use href="#i-grid"/></svg></button>
-  <button class="rail-btn" data-group="designer" title="Designer"><svg><use href="#i-pen"/></svg></button>
-  <button class="rail-btn" data-group="keys" title="Keybinds"><svg><use href="#i-keys"/></svg></button>
-  <button class="rail-btn" data-group="display" title="Position and size"><svg><use href="#i-screen"/></svg></button>
+<nav class="rail" aria-label="Sections"><div class="menu-label">☰ <span>Menu</span></div>
+  <button class="rail-btn active" data-group="crosshairs" title="Crosshairs"><svg><use href="#i-grid"/></svg><span>Crosshairs</span></button>
+  <button class="rail-btn" data-group="designer" title="Designer"><svg><use href="#i-pen"/></svg><span>Designer</span></button>
+  <button class="rail-btn" data-group="keys" title="Keybinds"><svg><use href="#i-keys"/></svg><span>Keybinds</span></button>
+  <button class="rail-btn" data-group="display" title="Position and size"><svg><use href="#i-screen"/></svg><span>Position & Size</span></button>
   <div class="rail-spacer"></div>
-  <button class="rail-btn" data-group="app" title="Settings"><svg><use href="#i-gear"/></svg></button>
+  <button class="rail-btn" data-group="app" title="Settings"><svg><use href="#i-gear"/></svg><span>Settings</span></button>
 </nav>
 
 <div class="shell">
@@ -82,7 +90,14 @@
   </header>
 
   <main class="content">
-    <!-- Library -->
+    <section class="page hidden" data-page="discover">
+  <div class="discover-wrap">
+    <div class="quick-actions"><button data-goto="library"><svg><use href="#i-search"/></svg>Browse</button><button data-goto="designer"><svg><use href="#i-pen"/></svg>Designer</button><button data-goto="saved"><svg><use href="#i-bookmark"/></svg>Saved</button><button data-goto="import"><svg><use href="#i-import"/></svg>Import</button></div>
+    <div class="discover-panels"><article><span class="eyebrow">YOUR CROSSHAIR</span><canvas id="discoverPreview" width="240" height="100"></canvas><strong id="discoverName"></strong><button class="text-action" data-goto="designer">Edit in Designer →</button></article></div>
+    <h2 class="featured-title">✦ DISCOVER CROSSHAIRS</h2><ul id="discoverCards" class="card-grid"></ul>
+  </div>
+</section>
+<!-- Library -->
     <section class="page" data-page="library">
       <div class="browse">
         <aside class="browse-side">
@@ -128,7 +143,7 @@
         <div class="page-head">
           <div>
             <h1>Import from Crosshair X</h1>
-            <p class="sub">Your saved Crosshair X crosshairs and subscribed workshop ones, converted to Crosshair Z.</p>
+            <p class="sub">Your saved Crosshair X crosshairs and subscribed workshop ones, converted to Crosshair Z. Crosshair Z is not affiliated with Crosshair X.</p>
           </div>
           <div class="head-actions">
             <button class="btn ghost icon" id="cxRescan" title="Scan again"><svg><use href="#i-refresh"/></svg></button>
@@ -163,45 +178,56 @@
       </div>
     </section>
 
-    <!-- Designer -->
+    <!-- Designer: toolbar / [layers | stage | properties] -->
     <section class="page hidden" data-page="designer">
       <div class="dz">
         <div class="dz-top">
+          <button class="tb-ico" id="dzLayersToggle" title="Show or hide layers"><svg><use href="#i-sidebar"/></svg></button>
           <label class="dz-name"><svg><use href="#i-pen"/></svg><input type="text" id="dzName" maxlength="40" placeholder="Untitled" spellcheck="false"></label>
-          <button class="btn ghost small" id="dzShare"><svg><use href="#i-share"/></svg>Copy code</button>
-          <button class="btn ghost small" id="dzSave"><svg><use href="#i-save"/></svg>Save</button>
+          <span class="dz-status" id="dzStatus" data-state="saved"><svg><use href="#i-check"/></svg><span id="dzStatusText">Saved</span></span>
+          <span class="dz-live" title="Edits show in game right away">Equipped</span>
           <div class="tb-spacer"></div>
           <button class="tb-ico" id="dzUndo" title="Undo (Ctrl+Z)"><svg><use href="#i-undo"/></svg></button>
           <button class="tb-ico" id="dzRedo" title="Redo (Ctrl+Y)"><svg><use href="#i-redo"/></svg></button>
           <span class="tb-div"></span>
-          <button class="tb-ico" id="dzLayerUp" title="Move layer up"><svg><use href="#i-up"/></svg></button>
-          <button class="tb-ico" id="dzLayerDown" title="Move layer down"><svg><use href="#i-down"/></svg></button>
-          <button class="tb-ico" id="dzDupLayer" title="Duplicate layer (Ctrl+D)"><svg><use href="#i-copy"/></svg></button>
-          <button class="tb-ico" id="dzDelLayer" title="Delete layer (Del)"><svg><use href="#i-trash"/></svg></button>
+          <button class="btn ghost small" id="dzShare" title="Copy share code"><svg><use href="#i-share"/></svg>Copy code</button>
+          <button class="btn small" id="dzSave" title="Save (Ctrl+S)"><svg><use href="#i-save"/></svg>Save</button>
         </div>
-        <div class="dz-body">
-          <div class="dz-stage">
+        <div class="dz-body" id="dzBody">
+          <aside class="dz-layers">
+            <div class="dz-layers-head">
+              <span class="dz-layers-title">Layers <span class="count" id="dzLayerCount">1</span></span>
+              <button class="tb-ico sm" id="dzLayerUp" title="Move layer up"><svg><use href="#i-up"/></svg></button>
+              <button class="tb-ico sm" id="dzLayerDown" title="Move layer down"><svg><use href="#i-down"/></svg></button>
+              <button class="tb-ico sm" id="dzDupLayer" title="Duplicate layer (Ctrl+D)"><svg><use href="#i-copy"/></svg></button>
+              <button class="tb-ico sm" id="dzDelLayer" title="Delete layer (Del)"><svg><use href="#i-trash"/></svg></button>
+            </div>
+            <ul id="dzLayerList" class="dz-layer-list"></ul>
+            <div class="dz-add">
+              <button class="dz-new-layer" id="dzToolShape" title="Add shape layer"><svg><use href="#i-shape"/></svg>Shape</button>
+              <button class="dz-new-layer" id="dzToolImage" title="Add image layer"><svg><use href="#i-image"/></svg>Image</button>
+            </div>
+          </aside>
+          <div class="dz-stage" id="dzStage" data-bg="dark">
             <canvas id="dzCanvas"></canvas>
-            <div class="dz-layers">
-              <div class="dz-layers-head"><svg><use href="#i-layers"/></svg>Layers <span class="count" id="dzLayerCount">1</span></div>
-              <ul id="dzLayerList" class="dz-layer-list"></ul>
-              <button class="dz-new-layer" id="dzNewLayer"><svg><use href="#i-plus"/></svg>New layer</button>
-            </div>
+            <figure class="dz-actual" title="Actual size, as it shows in game">
+              <canvas id="dzActual"></canvas>
+              <figcaption>Actual size</figcaption>
+            </figure>
             <div class="dz-scale"><span id="dzScaleLabel">2 px</span><span class="bar" id="dzScaleBar"></span></div>
-            <div class="dz-zoom">
-              <button id="dzZoomOut" title="Zoom out"><svg><use href="#i-minus"/></svg></button>
-              <button id="dzZoomLabel" title="Reset zoom">16×</button>
-              <button id="dzZoomIn" title="Zoom in"><svg><use href="#i-plus"/></svg></button>
-            </div>
             <div class="dz-dock">
               <button class="dock-btn" id="dzToolCenter" title="Center layer"><svg><use href="#i-center"/></svg></button>
-              <button class="dock-btn" id="dzToolImage" title="Add image layer"><svg><use href="#i-image"/></svg></button>
-              <button class="dock-btn" id="dzToolShape" title="Add shape layer"><svg><use href="#i-shape"/></svg></button>
+              <button class="dock-btn" id="dzFit" title="Reset view (0)"><svg><use href="#i-fit"/></svg></button>
               <span class="dock-div"></span>
-              <div class="dock-tabs" id="dzDockTabs">
-                <button data-tab="design" class="active">Design</button>
-                <button data-tab="animate">Animate</button>
+              <div class="dock-seg" id="dzBg" role="group" aria-label="Preview background">
+                <button data-bg="dark" class="active" aria-label="Dark background" aria-pressed="true" title="Dark background"><svg><use href="#i-moon"/></svg></button>
+                <button data-bg="light" aria-label="Light background" aria-pressed="false" title="Light background"><svg><use href="#i-sun"/></svg></button>
+                <button data-bg="game" aria-label="Game-like background" aria-pressed="false" title="Game-like background"><svg><use href="#i-mountain"/></svg></button>
               </div>
+              <span class="dock-div"></span>
+              <button class="dock-btn" id="dzZoomOut" title="Zoom out (-)"><svg><use href="#i-minus"/></svg></button>
+              <button class="dock-zoom" id="dzZoomLabel" title="Zoom (scroll on canvas)">16×</button>
+              <button class="dock-btn" id="dzZoomIn" title="Zoom in (+)"><svg><use href="#i-plus"/></svg></button>
             </div>
             <input type="file" id="dzImageFile" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden">
           </div>

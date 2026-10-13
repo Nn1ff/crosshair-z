@@ -1,8 +1,9 @@
 'use strict';
 
 /*
- * Crosshair Z designer: pixel-grid canvas, floating layer panel, property panel (Design / Animate),
- * bottom tool dock, undo/redo, drag-to-move, scrub-able number fields. Exposes window.CZDesigner.
+ * Crosshair Z designer: layer sidebar | pixel-grid stage | property panel (Design / Animate).
+ * Stage has an actual-size preview, switchable backgrounds (dark / light / game-like) and a view dock.
+ * Undo/redo, drag-to-move, scrub-able number fields. Exposes window.CZDesigner.
  */
 (function () {
   const C = CrosshairCore;
@@ -17,13 +18,63 @@
   const HISTORY_DEBOUNCE_MS = 250;
   const IMAGE_MAX_EDGE = 256;
   const SCRUB_PX_PER_STEP = 4;
+  const SCRUB_DEADZONE_PX = 3;
+  const FIT_FILL = 0.55; // reset view: crosshair fills this share of the smaller stage side
+  const ACTUAL_W = 132; // actual-size preview box, CSS px
+  const ACTUAL_H = 96;
+  const PREFS_KEY = 'cz.designer';
   const COLORS = {
-    grid: 'rgba(255,255,255,0.045)',
-    gridMajor: 'rgba(255,255,255,0.09)',
-    guide: 'rgba(255,255,255,0.22)',
     select: '#7cc4ff',
     selectText: '#0b1a2a',
   };
+  /** Per-background canvas colors. 'game' paints a simple scene so contrast can be judged. */
+  const BACKGROUNDS = {
+    dark: { fill: '#161920', grid: 'rgba(255,255,255,0.045)', gridMajor: 'rgba(255,255,255,0.09)', guide: 'rgba(255,255,255,0.22)' },
+    light: { fill: '#dfe4ea', grid: 'rgba(0,0,0,0.06)', gridMajor: 'rgba(0,0,0,0.12)', guide: 'rgba(0,0,0,0.3)' },
+    game: { fill: null, grid: 'rgba(255,255,255,0.05)', gridMajor: 'rgba(255,255,255,0.1)', guide: 'rgba(255,255,255,0.25)' },
+  };
+
+  /** Read small per-viewer UI prefs; storage may be unavailable, so never throw. */
+  function loadPrefs() {
+    try {
+      return JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function savePrefs(p) {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+    } catch {
+      // storage blocked: prefs just don't persist
+    }
+  }
+
+  /** Simple game-like scene (sky, horizon, walls) so the crosshair can be judged against mixed colors. */
+  function paintGameScene(c, W, H) {
+    const horizon = Math.round(H * 0.56);
+    const sky = c.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, '#6f97b5');
+    sky.addColorStop(1, '#c8d3d6');
+    c.fillStyle = sky;
+    c.fillRect(0, 0, W, horizon);
+    const ground = c.createLinearGradient(0, horizon, 0, H);
+    ground.addColorStop(0, '#8a7d62');
+    ground.addColorStop(1, '#4b4336');
+    c.fillStyle = ground;
+    c.fillRect(0, horizon, W, H - horizon);
+    // walls / crates at fixed proportions, so the scene scales with the stage
+    const blocks = [
+      [0.04, 0.3, 0.2, 0.26, '#a39a86'], [0.24, 0.42, 0.08, 0.14, '#6e6656'],
+      [0.62, 0.22, 0.12, 0.34, '#857c69'], [0.74, 0.36, 0.22, 0.2, '#b4ab96'],
+      [0.44, 0.5, 0.06, 0.06, '#3f3a31'],
+    ];
+    for (const [x, y, w, h, col] of blocks) {
+      c.fillStyle = col;
+      c.fillRect(Math.round(x * W), Math.round(y * H), Math.round(w * W), Math.round(h * H));
+    }
+  }
 
   /** Property panel definition. `layer` = selected layer. */
   const SECTIONS = [
@@ -104,7 +155,9 @@
       ts: 0,
       drag: null,
       bounds: null,
+      prefs: loadPrefs(),
     };
+    st.bg = BACKGROUNDS[st.prefs.bg] ? st.prefs.bg : 'dark';
 
     const layer = () => st.draft.layers[st.sel];
 
@@ -202,7 +255,7 @@
       ctx.lineWidth = 1;
       for (let i = -Math.ceil(g.cx / step) * step; i * g.z + g.ox < g.W; i += step) {
         const x = Math.round(g.ox + (g.cx + i) * g.z) + 0.5;
-        ctx.strokeStyle = (i / step) % 5 === 0 ? COLORS.gridMajor : COLORS.grid;
+        ctx.strokeStyle = (i / step) % 5 === 0 ? BACKGROUNDS[st.bg].gridMajor : BACKGROUNDS[st.bg].grid;
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, g.H);
@@ -210,7 +263,7 @@
       }
       for (let i = -Math.ceil(g.cy / step) * step; i * g.z + g.oy < g.H; i += step) {
         const y = Math.round(g.oy + (g.cy + i) * g.z) + 0.5;
-        ctx.strokeStyle = (i / step) % 5 === 0 ? COLORS.gridMajor : COLORS.grid;
+        ctx.strokeStyle = (i / step) % 5 === 0 ? BACKGROUNDS[st.bg].gridMajor : BACKGROUNDS[st.bg].grid;
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(g.W, y);
@@ -226,7 +279,7 @@
       const half = t % 2 ? 0.5 : 0;
       const x = Math.round(g.ox + (g.cx + half) * g.z) + 0.5;
       const y = Math.round(g.oy + (g.cy + half) * g.z) + 0.5;
-      ctx.strokeStyle = COLORS.guide;
+      ctx.strokeStyle = BACKGROUNDS[st.bg].guide;
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, g.H);
@@ -260,7 +313,7 @@
     }
 
     function label(text, x, y, align, dpr) {
-      ctx.font = `600 ${11 * dpr}px "Segoe UI", system-ui, sans-serif`;
+      ctx.font = `600 ${11 * dpr}px "Open Sans", "Segoe UI", sans-serif`;
       const tw = ctx.measureText(text).width;
       const ph = 4 * dpr;
       const h = 16 * dpr;
@@ -272,10 +325,39 @@
       ctx.fillText(text, left + ph, y - h / 2);
     }
 
+    function paintBackground(c, W, H) {
+      const bg = BACKGROUNDS[st.bg];
+      if (bg.fill) {
+        c.fillStyle = bg.fill;
+        c.fillRect(0, 0, W, H);
+      } else {
+        paintGameScene(c, W, H);
+      }
+    }
+
+    /** Actual-size preview: 1 crosshair px = 1 device px, including the global display scale. */
+    function drawActual() {
+      const c = $('dzActual');
+      const dpr = window.devicePixelRatio || 1;
+      const W = Math.round(ACTUAL_W * dpr);
+      const H = Math.round(ACTUAL_H * dpr);
+      if (c.width !== W || c.height !== H) {
+        c.width = W;
+        c.height = H;
+        c.style.width = `${ACTUAL_W}px`;
+        c.style.height = `${ACTUAL_H}px`;
+      }
+      const a = c.getContext('2d');
+      a.clearRect(0, 0, W, H);
+      paintBackground(a, W, H);
+      C.drawCrosshair(a, st.draft, Math.floor(W / 2), Math.floor(H / 2), { scale: opts.getScale(), fire: st.anim.levels });
+    }
+
     function draw() {
       if (!st.draft || !canvas.width) return;
       const g = geometry();
       ctx.clearRect(0, 0, g.W, g.H);
+      paintBackground(ctx, g.W, g.H);
       drawGrid(g);
       drawGuides(g);
       const off = new OffscreenCanvas(g.srcW, g.srcH);
@@ -283,12 +365,50 @@
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(off, g.ox, g.oy, g.srcW * g.z, g.srcH * g.z);
       drawSelection(g);
+      drawActual();
       $('dzZoomLabel').textContent = `${st.zoom}×`;
     }
 
     function setZoom(z) {
       st.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z)));
       draw();
+    }
+
+    /** Reset view: zoom so the whole crosshair fits comfortably in the stage. */
+    function fitView() {
+      const extent = Math.max(1, C.crosshairExtent(st.draft) * opts.getScale());
+      const side = Math.min(canvas.clientWidth, canvas.clientHeight) || 400;
+      setZoom(Math.min(ZOOM_DEFAULT * 2, (side * FIT_FILL) / (extent * 2)));
+    }
+
+    function setBackground(bg) {
+      if (!BACKGROUNDS[bg]) return;
+      st.bg = bg;
+      st.prefs.bg = bg;
+      savePrefs(st.prefs);
+      $('dzStage').dataset.bg = bg;
+      document.querySelectorAll('#dzBg button').forEach((b) => {
+        const active = b.dataset.bg === bg;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', String(active));
+      });
+      draw();
+    }
+
+    function setLayersOpen(open) {
+      st.prefs.layersHidden = !open;
+      savePrefs(st.prefs);
+      $('dzBody').classList.toggle('no-layers', !open);
+      $('dzLayersToggle').classList.toggle('on', open);
+      requestAnimationFrame(resize);
+    }
+
+    /** Save state chip in the toolbar: 'saving' while a change is in flight, 'saved' once stored. */
+    function setStatus(state) {
+      const chip = $('dzStatus');
+      if (chip.dataset.state === state) return;
+      chip.dataset.state = state;
+      chip.replaceChildren(icon(state === 'saved' ? 'check' : 'refresh'), el('span', null, state === 'saved' ? 'Saved' : 'Saving…'));
     }
 
     // ---------- firing preview ----------
@@ -365,9 +485,19 @@
           l.visible = !l.visible;
           refresh(true);
         });
-        const row = el('li', { class: 'dz-layer' + (i === st.sel ? ' sel' : '') + (l.visible ? '' : ' muted') },
+        const row = el('li', {
+          class: 'dz-layer' + (i === st.sel ? ' sel' : '') + (l.visible ? '' : ' muted'),
+          role: 'listitem', tabindex: '0', 'aria-label': `${l.name}, layer ${i + 1}`,
+          'aria-current': i === st.sel ? 'true' : null,
+        },
           el('span', { class: 'dz-layer-ico' }, layerThumb(l)), el('span', { class: 'dz-layer-name' }, l.name), eye);
         row.addEventListener('click', () => select(i));
+        row.addEventListener('keydown', (e) => {
+          if (e.target !== row || (e.key !== 'Enter' && e.key !== ' ')) return;
+          e.preventDefault();
+          select(i);
+          requestAnimationFrame(() => $('dzLayerList').children[i]?.focus());
+        });
         row.addEventListener('dblclick', () => renameLayer(i));
         return row;
       }));
@@ -464,39 +594,76 @@
 
     // ---------- property fields ----------
 
-    /** Compact number field with icon; drag icon horizontally to scrub. */
+    /**
+     * Make a number field scrubbable: press anywhere on `box` and drag left/right to change the value.
+     * A click without movement focuses `input` for typing. Shift = 10x faster, Alt = 1/10 (non-int only).
+     * @param {HTMLElement} box drag surface
+     * @param {HTMLInputElement} input text entry inside box
+     * @param {{get: () => number, set: (v: number) => void, step: number, min: number, max: number, int: boolean}} o
+     */
+    function makeScrub(box, input, o) {
+      box.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0 || document.activeElement === input) return; // typing mode: normal caret behavior
+        e.preventDefault();
+        box.setPointerCapture(e.pointerId);
+        const startX = e.clientX;
+        const startV = o.get();
+        let dragging = false;
+        const move = (ev) => {
+          const dx = ev.clientX - startX;
+          if (!dragging && Math.abs(dx) < SCRUB_DEADZONE_PX) return;
+          if (!dragging) {
+            dragging = true;
+            box.classList.add('scrubbing');
+          }
+          const mul = ev.shiftKey ? 10 : ev.altKey && !o.int ? 0.1 : 1;
+          const raw = startV + Math.round(dx / SCRUB_PX_PER_STEP) * o.step * mul;
+          const next = Math.min(o.max, Math.max(o.min, Math.round(raw * 1000) / 1000));
+          if (next !== o.get()) o.set(next);
+        };
+        const end = () => {
+          box.removeEventListener('pointermove', move);
+          box.removeEventListener('pointerup', end);
+          box.removeEventListener('pointercancel', end);
+          box.classList.remove('scrubbing');
+          if (!dragging) {
+            input.focus();
+            input.select();
+          }
+        };
+        box.addEventListener('pointermove', move);
+        box.addEventListener('pointerup', end);
+        box.addEventListener('pointercancel', end);
+      });
+    }
+
+    /** Compact number field "Label  value" with a fill bar; drag anywhere on it to scrub. */
     function numField(item, pct) {
       const spec = getPath(C.LAYER_SCHEMA, item.path);
       const factor = pct ? 100 : 1;
       const step = item.step || (pct ? 1 : spec.int ? 1 : 0.05);
-      const input = el('input', { type: 'number', step, min: spec.min * factor, max: spec.max * factor });
-      const handle = el('span', { class: 'nf-ico', title: 'Drag to adjust' }, pct ? `${item.label} %` : item.label);
+      const min = spec.min * factor;
+      const max = spec.max * factor;
+      const input = el('input', { type: 'number', step, min, max });
+      const handle = el('span', { class: 'nf-ico' }, pct ? `${item.label} %` : item.label);
+      const fill = el('span', { class: 'nf-fill' });
+      const box = el('span', { class: 'nf scrub', title: 'Drag left/right to adjust · click to type · Shift = faster' }, fill, handle, input);
+      const get = () => getPath(layer(), item.path) * factor;
       const commit = (v) => {
         const n = Number(v);
         if (v === '' || !Number.isFinite(n)) return sync();
         setValue(item.path, n / factor);
       };
       input.addEventListener('change', () => commit(input.value));
-      input.addEventListener('keydown', (e) => e.key === 'Enter' && input.blur());
-      handle.addEventListener('pointerdown', (e) => {
-        handle.setPointerCapture(e.pointerId);
-        const start = { x: e.clientX, v: getPath(layer(), item.path) * factor };
-        const move = (ev) => {
-          const steps = Math.round((ev.clientX - start.x) / SCRUB_PX_PER_STEP);
-          const next = Math.round((start.v + steps * step) * 1000) / 1000;
-          if (next / factor !== getPath(layer(), item.path)) setValue(item.path, next / factor);
-        };
-        const up = () => {
-          handle.removeEventListener('pointermove', move);
-          handle.removeEventListener('pointerup', up);
-        };
-        handle.addEventListener('pointermove', move);
-        handle.addEventListener('pointerup', up);
-      });
+      input.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === 'Escape') && input.blur());
+      input.addEventListener('blur', () => sync());
+      makeScrub(box, input, { get, set: (v) => setValue(item.path, v / factor), step, min, max, int: !!spec.int || pct });
       st.syncers.push(() => {
-        if (document.activeElement !== input) input.value = Math.round(getPath(layer(), item.path) * factor * 1000) / 1000;
+        const v = get();
+        if (document.activeElement !== input) input.value = Math.round(v * 1000) / 1000;
+        fill.style.width = `${max > min ? ((v - min) / (max - min)) * 100 : 0}%`;
       });
-      return el('label', { class: 'pf' }, el('span', { class: 'nf' }, handle, input));
+      return el('div', { class: 'pf' }, box);
     }
 
     function colorField(item) {
@@ -514,6 +681,13 @@
         if (Number.isFinite(n)) setValue(item.alpha, n / 100);
         else sync();
       });
+      alpha.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === 'Escape') && alpha.blur());
+      const alphaBox = el('span', { class: 'cf-a scrub', title: 'Drag left/right to adjust opacity' }, alpha, el('span', { class: 'cf-pct' }, '%'));
+      makeScrub(alphaBox, alpha, {
+        get: () => Math.round(getPath(layer(), item.alpha) * 100),
+        set: (v) => setValue(item.alpha, v / 100),
+        step: 1, min: 0, max: 100, int: true,
+      });
       st.syncers.push(() => {
         const v = getPath(layer(), item.path);
         picker.value = v;
@@ -521,7 +695,7 @@
         if (document.activeElement !== alpha) alpha.value = Math.round(getPath(layer(), item.alpha) * 100);
       });
       return el('div', { class: 'pf full' }, el('span', { class: 'pf-label' }, item.label),
-        el('div', { class: 'cf' }, picker, hex, el('span', { class: 'cf-sep' }), alpha, el('span', { class: 'cf-pct' }, '%')));
+        el('div', { class: 'cf' }, picker, hex, el('span', { class: 'cf-sep' }), alphaBox));
     }
 
     function dotColorField() {
@@ -627,7 +801,7 @@
         numField({ path: 'offsetY', label: 'Y' }));
       const scale = el('div', { class: 'pf-pair' }, numField({ path: 'scale', label: 'Scale', step: 0.1 }));
       const kind = optsField({ path: 'kind', label: 'Type', values: ['shape', 'image'] });
-      const node = el('section', { class: 'sec open transform' }, el('div', { class: 'sec-body' }, xy, scale, el('div', { class: 'pf-pair' }, kind)));
+      const node = el('section', { class: 'sec open transform' }, el('div', { class: 'sec-body' }, xy, scale, kind));
       st.syncers.push(() => node.classList.toggle('hidden', st.tab !== 'design'));
       return node;
     }
@@ -637,10 +811,9 @@
       document.querySelectorAll('#dzTabs button').forEach((b) =>
         b.addEventListener('click', () => {
           st.tab = b.dataset.tab;
-          document.querySelectorAll('#dzTabs button, #dzDockTabs button').forEach((x) => x.classList.toggle('active', x.dataset.tab === st.tab));
+          document.querySelectorAll('#dzTabs button').forEach((x) => x.classList.toggle('active', x.dataset.tab === st.tab));
           sync();
         }));
-      document.querySelectorAll('#dzDockTabs button').forEach((b) => b.addEventListener('click', () => $('dzTabs').querySelector(`[data-tab="${b.dataset.tab}"]`).click()));
     }
 
     // ---------- toolbar / dock / keys ----------
@@ -657,7 +830,6 @@
       $('dzDelLayer').addEventListener('click', deleteLayer);
       $('dzLayerUp').addEventListener('click', () => moveLayer(-1));
       $('dzLayerDown').addEventListener('click', () => moveLayer(1));
-      $('dzNewLayer').addEventListener('click', newShapeLayer);
       $('dzSave').addEventListener('click', () => opts.onSave());
       $('dzShare').addEventListener('click', () => opts.onShare());
       $('dzName').addEventListener('change', (e) => opts.onRename(e.target.value));
@@ -676,7 +848,10 @@
       $('dzToolShape').addEventListener('click', newShapeLayer);
       $('dzZoomIn').addEventListener('click', () => setZoom(st.zoom * 1.25));
       $('dzZoomOut').addEventListener('click', () => setZoom(st.zoom / 1.25));
-      $('dzZoomLabel').addEventListener('click', () => setZoom(ZOOM_DEFAULT));
+      $('dzZoomLabel').addEventListener('click', fitView);
+      $('dzFit').addEventListener('click', fitView);
+      document.querySelectorAll('#dzBg button').forEach((b) => b.addEventListener('click', () => setBackground(b.dataset.bg)));
+      $('dzLayersToggle').addEventListener('click', () => setLayersOpen($('dzBody').classList.contains('no-layers')));
       $('dzImageFile').addEventListener('change', (e) => {
         loadImageFile(e.target.files && e.target.files[0]);
         e.target.value = '';
@@ -686,13 +861,22 @@
 
     function onKey(e) {
       if (!isActive()) return;
+      const k = e.key.toLowerCase();
+      if (e.ctrlKey && k === 's') {
+        e.preventDefault();
+        if (document.activeElement) document.activeElement.blur(); // commit a field being typed in
+        opts.onSave();
+        return;
+      }
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      const k = e.key.toLowerCase();
       if (e.ctrlKey && k === 'z' && !e.shiftKey) restore(st.hIdx - 1);
       else if (e.ctrlKey && (k === 'y' || (k === 'z' && e.shiftKey))) restore(st.hIdx + 1);
       else if (e.ctrlKey && k === 'd') addLayer(clone(layer()));
       else if (k === 'delete') deleteLayer();
+      else if (!e.ctrlKey && k === '0') fitView();
+      else if (!e.ctrlKey && (k === '+' || k === '=')) setZoom(st.zoom * 1.25);
+      else if (!e.ctrlKey && k === '-') setZoom(st.zoom / 1.25);
       else if (k.startsWith('arrow')) {
         const step = e.shiftKey ? 10 : 1;
         const l = layer();
@@ -737,6 +921,8 @@
     wireCanvas();
     wireToolbar();
     buildProps();
+    setBackground(st.bg);
+    setLayersOpen(!st.prefs.layersHidden);
     C.onImageLoaded(() => {
       st.bounds = null;
       draw();
@@ -744,7 +930,7 @@
       if (opts.onImageLoaded) opts.onImageLoaded();
     });
 
-    return { load, redraw: () => { st.bounds = null; draw(); }, resize };
+    return { load, redraw: () => { st.bounds = null; draw(); }, resize, setStatus };
   }
 
   window.CZDesigner = { create };

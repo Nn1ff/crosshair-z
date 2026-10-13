@@ -15,7 +15,7 @@ const ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'icon.png');
 const TRAY_ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'tray.png');
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
 const PRELOAD = path.join(__dirname, 'preload.js');
-const CAPTURE_PAGES = ['library', 'saved', 'import', 'share', 'designer', 'hotkeys', 'toggle', 'position', 'settings'];
+const CAPTURE_PAGES = ['library', 'saved', 'import', 'share', 'designer', 'hotkeys', 'toggle', 'position', 'settings', 'designer:light', 'designer:game', 'designer:dark'];
 
 // Capture mode must not share profile/cache dirs with a running instance.
 if (process.env.CZ_CAPTURE_DIR) app.setPath('userData', path.join(process.env.CZ_CAPTURE_DIR, 'userdata'));
@@ -611,8 +611,18 @@ async function captureAndQuit(dir) {
         await wait(300);
       }
       const img = await win.webContents.capturePage(undefined, { stayHidden: true });
-      fs.writeFileSync(path.join(dir, `${name}.png`), img.toPNG());
+      fs.writeFileSync(path.join(dir, `${name.replace(':', '-')}.png`), img.toPNG());
       log.info('captured', { name, size: img.getSize() });
+    }
+    // smallest allowed window: check that layouts still fit
+    const [minW, minH] = state.settings.getMinimumSize();
+    state.settings.setSize(minW, minH);
+    await wait(400);
+    for (const page of ['designer', 'library', 'saved']) {
+      await state.settings.webContents.executeJavaScript(`window.czShowPage(${JSON.stringify(page)})`);
+      await wait(300);
+      const img = await state.settings.webContents.capturePage(undefined, { stayHidden: true });
+      fs.writeFileSync(path.join(dir, `${page}-min.png`), img.toPNG());
     }
   } catch (err) {
     log.error('capture failed', err);
