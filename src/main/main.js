@@ -8,12 +8,13 @@ const { createLogger } = require('./logger');
 const { createMousePoller } = require('./mouse');
 const { scanCrosshairX, convertFile } = require('./crosshairx-scan');
 const { loadDefaultPack } = require('../shared/default-pack');
-const { checkForUpdate, downloadUpdate, compareVersions } = require('./updater');
+const { checkForUpdate, downloadUpdate, compareVersions, cleanupOldVersions } = require('./updater');
 const { ConfigStore, cleanName, cleanAccel, newId, fingerprint, dedupeProfiles, DEFAULT_HOTKEYS, MAX_PROFILES } = require('./store');
 
 const TOPMOST_REASSERT_MS = 2000;
 const UPDATE_CHECK_DELAY_MS = 5000; // after boot, so startup is never slowed by the network
 const UPDATE_HANDOVER_TIMEOUT_MS = 30000; // new version should have taken over by then
+const UPDATE_CLEANUP_DELAY_MS = 15000; // old version needs a moment to quit and release its exe
 const MOVE_STEP_PX = 1;
 const APP_USER_MODEL_ID = 'com.crosshairz.app'; // = build.appId; shortcut and process must match for taskbar grouping
 const START_MENU_LINK_NAME = 'Crosshair Z.lnk';
@@ -805,6 +806,13 @@ function boot() {
   if (!hidden) openSettings({ front: true });
   log.info('boot complete', { version: app.getVersion(), hidden, firstRun });
   if (cfg().checkUpdates) setTimeout(runUpdateCheck, UPDATE_CHECK_DELAY_MS);
+  if (process.env.PORTABLE_EXECUTABLE_FILE) {
+    // in-app updates save each version next to the old one; drop the outdated copies
+    setTimeout(() => {
+      cleanupOldVersions({ dir: path.dirname(LAUNCH_EXE), currentVersion: app.getVersion(), currentExe: LAUNCH_EXE, log })
+        .catch((err) => log.error('update cleanup failed', { error: err.message }));
+    }, UPDATE_CLEANUP_DELAY_MS);
+  }
 }
 
 

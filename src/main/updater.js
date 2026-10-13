@@ -130,4 +130,41 @@ async function downloadUpdate({ fetchFn, release, dir, log, timeoutMs = DOWNLOAD
   }
 }
 
-module.exports = { compareVersions, parseRelease, checkForUpdate, downloadUpdate, RELEASES_URL, ASSET_NAME };
+const VERSIONED_EXE_RE = /^Crosshair Z (\d+\.\d+\.\d+)\.exe(\.part)?$/;
+
+/**
+ * Delete what earlier in-app updates left in `dir`: older "Crosshair Z <version>.exe" copies and
+ * stale ".part" downloads. Never touches the running exe, newer/equal versions or any other file.
+ * Files still locked (old version just quitting) are skipped and retried on a later start.
+ * @returns {Promise<string[]>} names removed
+ */
+async function cleanupOldVersions({ dir, currentVersion, currentExe, log }) {
+  let names;
+  try {
+    names = await fs.promises.readdir(dir);
+  } catch (err) {
+    log.warn('update cleanup: cannot read dir', { dir, error: err.message });
+    return [];
+  }
+  // electron-builder output folder (local dev builds kept on purpose), not an update location
+  if (names.includes('win-unpacked')) return [];
+  const self = path.resolve(currentExe).toLowerCase();
+  const removed = [];
+  for (const name of names) {
+    const m = VERSIONED_EXE_RE.exec(name);
+    if (!m) continue;
+    const file = path.join(dir, name);
+    if (path.resolve(file).toLowerCase() === self) continue;
+    if (!m[2] && compareVersions(m[1], currentVersion) >= 0) continue;
+    try {
+      await fs.promises.rm(file);
+      removed.push(name);
+    } catch (err) {
+      log.warn('update cleanup: could not remove', { file, error: err.message });
+    }
+  }
+  if (removed.length) log.info('update cleanup removed old versions', { dir, removed });
+  return removed;
+}
+
+module.exports = { compareVersions, parseRelease, checkForUpdate, downloadUpdate, cleanupOldVersions, RELEASES_URL, ASSET_NAME };

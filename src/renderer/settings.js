@@ -92,7 +92,7 @@
 
   /**
    * Crosshair card: preview "slide", name, optional tag/extra row and bookmark button.
-   * @param {{onMark?: () => void, marked?: boolean}} [opts]
+   * @param {{onMark?: () => void, onUnmark?: () => void, marked?: boolean}} [opts]
    */
   function card(ch, name, tag, active, extra, opts = {}) {
     const canvas = el('canvas');
@@ -100,10 +100,11 @@
     const li = el('li', { class: 'card' + (active ? ' active' : ''), title: name }, el('div', { class: 'slide' }, canvas),
       el('div', { class: 'meta' }, el('span', { class: 'name' }, name), tag ? el('span', { class: 'tag' }, tag) : null), extra);
     if (opts.onMark) {
-      const mark = el('button', { class: 'mark' + (opts.marked ? ' on' : ''), title: opts.marked ? 'Already in Saved' : 'Add to Saved' }, icon(opts.marked ? 'bookmarked' : 'bookmark'));
+      const mark = el('button', { class: 'mark' + (opts.marked ? ' on' : ''), title: opts.marked ? 'Remove from Saved' : 'Add to Saved' }, icon(opts.marked ? 'bookmarked' : 'bookmark'));
       mark.addEventListener('click', (e) => {
         e.stopPropagation();
         if (!opts.marked) opts.onMark();
+        else if (opts.onUnmark) opts.onUnmark();
       });
       li.append(mark);
     }
@@ -172,6 +173,7 @@
       const li = card(p.crosshair, p.name, ui.category === 'All' ? p.category : '', false, null, {
         marked,
         onMark: () => saveProfile(p.name, p.crosshair),
+        onUnmark: () => unsaveProfile(p.name, p.crosshair),
       });
       li.addEventListener('click', () => createProfile(p.name, p.crosshair, true));
       return li;
@@ -185,6 +187,25 @@
     if (res) {
       applyConfig(res.config, false);
       toast(res.existed ? `"${name}" is already in Saved` : `Saved "${name}"`);
+    }
+  }
+
+  /** Remove every saved crosshair identical to this library item (bookmark toggle). */
+  async function unsaveProfile(name, crosshair) {
+    const print = JSON.stringify(C.sanitizeCrosshair(crosshair));
+    const matches = ui.config.profiles.filter((p) => JSON.stringify(C.sanitizeCrosshair(p.crosshair)) === print);
+    if (!matches.length) return;
+    if (matches.length >= ui.config.profiles.length) {
+      toast(`"${name}" is your only saved crosshair and stays in Saved`, true);
+      return;
+    }
+    if (matches.some((p) => p.hotkey) && !window.confirm(`"${name}" has a hotkey. Remove it from Saved anyway?`)) return;
+    flushPush();
+    let cfg = null;
+    for (const p of matches) cfg = (await call('profile:delete', p.id)) || cfg;
+    if (cfg) {
+      applyConfig(cfg, true);
+      toast(`Removed "${name}" from Saved`);
     }
   }
 

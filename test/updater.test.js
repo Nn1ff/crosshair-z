@@ -75,3 +75,21 @@ test('downloadUpdate writes the file and rejects size mismatch without leftovers
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('cleanupOldVersions removes only older versioned exes and stale .part files', async () => {
+  const { cleanupOldVersions } = require('../src/main/updater');
+  const fsp = require('fs').promises;
+  const os = require('os');
+  const pth = require('path');
+  const dir = await fsp.mkdtemp(pth.join(os.tmpdir(), 'cz-clean-'));
+  const files = ['Crosshair Z 1.7.18.exe', 'Crosshair Z 1.7.19.exe', 'Crosshair Z 1.7.20.exe', 'Crosshair Z 1.7.21.exe', 'Crosshair Z 1.7.21.exe.part', 'Crosshair-Z.exe', 'notes.txt'];
+  for (const f of files) await fsp.writeFile(pth.join(dir, f), 'x');
+  const quiet = { info() {}, warn() {}, error() {} };
+  const removed = await cleanupOldVersions({ dir, currentVersion: '1.7.20', currentExe: pth.join(dir, 'Crosshair Z 1.7.20.exe'), log: quiet });
+  assert.deepStrictEqual(removed.sort(), ['Crosshair Z 1.7.18.exe', 'Crosshair Z 1.7.19.exe', 'Crosshair Z 1.7.21.exe.part']);
+  assert.deepStrictEqual((await fsp.readdir(dir)).sort(), ['Crosshair Z 1.7.20.exe', 'Crosshair Z 1.7.21.exe', 'Crosshair-Z.exe', 'notes.txt']);
+  await fsp.mkdir(pth.join(dir, 'win-unpacked'));
+  await fsp.writeFile(pth.join(dir, 'Crosshair Z 1.0.0.exe'), 'x');
+  assert.deepStrictEqual(await cleanupOldVersions({ dir, currentVersion: '1.7.20', currentExe: 'x', log: quiet }), []);
+  await fsp.rm(dir, { recursive: true, force: true });
+});
