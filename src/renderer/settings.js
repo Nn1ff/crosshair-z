@@ -9,6 +9,7 @@
   const CARD_W = 128;
   const CARD_H = 96;
   const MAX_OFFSET = 4000;
+  const DRAG_SCROLL_THRESHOLD_PX = 5; // movement before a press on a strip becomes a drag
   const HOTKEY_LABELS = {
     toggle: 'Show / hide',
     next: 'Next crosshair',
@@ -130,6 +131,49 @@
     li.addEventListener('click', () => activate(p.id));
     li.addEventListener('dblclick', () => showPage('designer'));
     return li;
+  }
+
+  /**
+   * Drag a horizontal strip with the mouse (and scroll it with the wheel). A drag past the
+   * threshold swallows the click that follows, so letting go never equips a card by accident.
+   */
+  function makeDragScroll(strip) {
+    let drag = null;
+    strip.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.target.closest('.mark')) return;
+      drag = { id: e.pointerId, x: e.clientX, left: strip.scrollLeft, moved: false };
+    });
+    strip.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) < DRAG_SCROLL_THRESHOLD_PX) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        strip.setPointerCapture(e.pointerId);
+        strip.classList.add('dragging');
+      }
+      strip.scrollLeft = drag.left - dx;
+    });
+    const end = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (drag.moved) {
+        strip.classList.remove('dragging');
+        const swallow = (ev) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+        };
+        strip.addEventListener('click', swallow, { capture: true, once: true });
+        setTimeout(() => strip.removeEventListener('click', swallow, { capture: true }), 0);
+      }
+      drag = null;
+    };
+    strip.addEventListener('pointerup', end);
+    strip.addEventListener('pointercancel', end);
+    strip.addEventListener('wheel', (e) => {
+      if (strip.scrollWidth <= strip.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      strip.scrollLeft += e.deltaY;
+    }, { passive: false });
   }
 
   /** Saved page grid + the "Your crosshairs" strip on Discover. */
@@ -656,6 +700,7 @@
   }
 
   function wire() {
+    makeDragScroll($('savedStrip'));
     document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
     document.querySelectorAll('.rail-btn').forEach((b) => b.addEventListener('click', () => {
       const g = b.dataset.group;

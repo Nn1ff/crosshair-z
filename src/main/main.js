@@ -10,6 +10,7 @@ const { scanCrosshairX, convertFile } = require('./crosshairx-scan');
 const { loadDefaultPack } = require('../shared/default-pack');
 const { checkForUpdate, downloadUpdate, compareVersions, cleanupOldVersions } = require('./updater');
 const { ConfigStore, cleanName, cleanAccel, newId, fingerprint, dedupeProfiles, DEFAULT_HOTKEYS, MAX_PROFILES } = require('./store');
+const { readRunKey, staleEntryNames } = require('./autostart');
 
 const TOPMOST_REASSERT_MS = 2000;
 const UPDATE_CHECK_DELAY_MS = 5000; // after boot, so startup is never slowed by the network
@@ -18,6 +19,7 @@ const UPDATE_CLEANUP_DELAY_MS = 15000; // old version needs a moment to quit and
 const MOVE_STEP_PX = 1;
 const APP_USER_MODEL_ID = 'com.crosshairz.app'; // = build.appId; shortcut and process must match for taskbar grouping
 const START_MENU_LINK_NAME = 'Crosshair Z.lnk';
+const LOGIN_ITEM_NAME = APP_USER_MODEL_ID; // Run-key value name of our one autostart entry
 const LEGACY_LOGIN_ITEM_NAMES = ['electron.app.Crosshair Z']; // Run-key names used by older builds
 const ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'icon.png');
 const TRAY_ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'tray.png');
@@ -478,16 +480,20 @@ function registerHotkeys() {
 }
 
 /**
- * Builds before the app id was set registered autostart under Electron's default value name, so
- * Windows kept a second entry pointing at an old exe. Delete those names; the current entry stays.
+ * Exactly one autostart entry may exist. Any other Run-key value that starts a Crosshair Z exe
+ * (older builds used other value names; other copies of the exe) is deleted. Never throws.
  */
-function removeLegacyLoginItems() {
+async function removeStaleLoginItems() {
   if (process.platform !== 'win32') return;
-  for (const name of LEGACY_LOGIN_ITEM_NAMES) {
+  const names = new Set(LEGACY_LOGIN_ITEM_NAMES);
+  for (const n of staleEntryNames(await readRunKey(log), LOGIN_ITEM_NAME)) names.add(n);
+  names.delete(LOGIN_ITEM_NAME);
+  for (const name of names) {
     try {
       app.setLoginItemSettings({ openAtLogin: false, name });
+      log.info('removed stale autostart entry', { name });
     } catch (err) {
-      log.warn('removing legacy login item failed', { name, error: err.message });
+      log.warn('removing stale autostart entry failed', { name, error: err.message });
     }
   }
 }
@@ -499,10 +505,10 @@ function removeLegacyLoginItems() {
 function applyLoginItem() {
   const path = LAUNCH_EXE;
   const openAtLogin = cfg().launchAtLogin;
-  removeLegacyLoginItems();
+  removeStaleLoginItems().catch((err) => log.warn('autostart cleanup failed', { error: err.message }));
   try {
-    app.setLoginItemSettings({ openAtLogin, path, args: ['--hidden'] });
-    const now = app.getLoginItemSettings({ path, args: ['--hidden'] });
+    app.setLoginItemSettings({ openAtLogin, path, args: ['--hidden'], name: LOGIN_ITEM_NAME });
+    const now = app.getLoginItemSettings({ path, args: ['--hidden'], name: LOGIN_ITEM_NAME });
     log.info('login item applied', { openAtLogin, path, registered: now.openAtLogin, willLaunch: now.executableWillLaunchAtLogin });
   } catch (err) {
     log.error('setLoginItemSettings failed', { error: err.message, path });
