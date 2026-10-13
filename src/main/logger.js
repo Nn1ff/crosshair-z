@@ -14,31 +14,49 @@ const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
 function createLogger(dir, name) {
   const file = path.join(dir, `${name}.log`);
   let fileOk = true;
+  // Console mirroring stops for good once stdout/stderr break (e.g. the launching terminal was
+  // closed → EPIPE). Writing again would throw, get logged, throw… and spin a CPU core.
+  let consoleOk = true;
+  const dropConsole = () => {
+    consoleOk = false;
+  };
+  for (const stream of [process.stdout, process.stderr]) {
+    if (stream && typeof stream.on === 'function') stream.on('error', dropConsole);
+  }
+
+  function toConsole(level, line) {
+    if (!consoleOk) return;
+    try {
+      (level === 'ERROR' ? console.error : console.log)(line);
+    } catch {
+      dropConsole();
+    }
+  }
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch (err) {
     fileOk = false;
-    console.error('[logger] cannot create log dir', dir, err);
+    toConsole('ERROR', `[logger] cannot create log dir ${dir}: ${err.message}`);
   }
 
   function rotateIfNeeded() {
     try {
       if (fs.statSync(file).size > MAX_LOG_BYTES) fs.renameSync(file, `${file}.1`);
     } catch (err) {
-      if (err.code !== 'ENOENT') console.error('[logger] rotate failed', err);
+      if (err.code !== 'ENOENT') toConsole('ERROR', `[logger] rotate failed: ${err.message}`);
     }
   }
 
   function write(level, msg, ctx) {
     const line = `${new Date().toISOString()} ${level} ${msg}${ctx ? ' ' + safeJson(ctx) : ''}`;
-    (level === 'ERROR' ? console.error : console.log)(line);
+    toConsole(level, line);
     if (!fileOk) return;
     try {
       rotateIfNeeded();
       fs.appendFileSync(file, line + '\n', 'utf8');
     } catch (err) {
       fileOk = false;
-      console.error('[logger] write failed, file logging disabled', err);
+      toConsole('ERROR', `[logger] write failed, file logging disabled: ${err.message}`);
     }
   }
 

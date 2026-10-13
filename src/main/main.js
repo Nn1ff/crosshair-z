@@ -54,7 +54,16 @@ const state = {
   update: { status: 'idle', release: null, error: null },
 };
 
-process.on('uncaughtException', (err) => log.error('uncaughtException', err));
+// A closed stdout/stderr (EPIPE) is harmless for a tray app; logging it again could loop.
+let epipeLogged = false;
+process.on('uncaughtException', (err) => {
+  if (err && err.code === 'EPIPE') {
+    if (!epipeLogged) log.warn('console pipe closed, console output disabled');
+    epipeLogged = true;
+    return;
+  }
+  log.error('uncaughtException', err);
+});
 process.on('unhandledRejection', (err) => log.error('unhandledRejection', err instanceof Error ? err : { err }));
 
 // ---------- config helpers ----------
