@@ -185,6 +185,8 @@ class ConfigStore {
     this.file = path.join(dir, 'config.json');
     this.log = log;
     this.timer = null;
+    /** true when no config file existed yet (very first start) */
+    this.isNew = false;
     this.data = this.load();
   }
 
@@ -194,6 +196,7 @@ class ConfigStore {
       text = fs.readFileSync(this.file, 'utf8').replace(/^\uFEFF/, '');
     } catch (err) {
       if (err.code === 'ENOENT') {
+        this.isNew = true;
         this.log.info('config missing, using defaults', { file: this.file });
       } else {
         this.log.error('config read failed, using defaults', err);

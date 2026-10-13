@@ -1,7 +1,7 @@
 {
   "name": "crosshair-z",
   "productName": "Crosshair Z",
-  "version": "1.7.13",
+  "version": "1.7.14",
   "description": "Crosshair Z",
   "main": "src/main/main.js",
   "author": "Nn1ff",
@@ -22,11 +22,21 @@
     "files": [
       "src/**/*",
       "assets/**/*",
-      "package.json"
+      "!assets/splash.bmp",
+      "package.json",
+      "!node_modules/koffi/build/koffi/!(win32_x64){,/**}",
+      "!node_modules/koffi/build/koffi/win32_x64/*.{exp,lib}",
+      "!node_modules/koffi/{doc,src,vendor,lib}{,/**}"
     ],
     "win": {
       "target": "portable",
       "icon": "assets/icon.png"
+    },
+    "electronLanguages": [
+      "en-US"
+    ],
+    "portable": {
+      "splashImage": "assets/splash.bmp"
     }
   },
   "devDependencies": {

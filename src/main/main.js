@@ -230,7 +230,12 @@ function onMouse(now, prev) {
 
 // ---------- settings window ----------
 
-function openSettings() {
+/**
+ * Show the settings window (create on demand).
+ * @param {{front?: boolean}} [opts] front: force it above other windows (startup after a slow portable unpack,
+ *   when Windows may otherwise open it behind whatever the user clicked meanwhile)
+ */
+function openSettings(opts = {}) {
   if (state.settings && !state.settings.isDestroyed()) {
     if (state.settings.isMinimized()) state.settings.restore();
     state.settings.show();
@@ -253,7 +258,14 @@ function openSettings() {
     webPreferences: { preload: PRELOAD, contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   win.setMenu(null);
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    win.show();
+    if (opts.front) {
+      win.setAlwaysOnTop(true);
+      win.focus();
+      win.setAlwaysOnTop(false);
+    }
+  });
   // Destroy instead of hide: keeps the in-game footprint to the overlay only (~100 MB less).
   // The renderer flushes pending edits on beforeunload; the tray keeps the app alive.
   win.on('closed', () => {
@@ -752,9 +764,12 @@ function boot() {
   screen.on('display-added', onDisplaysChanged);
   screen.on('display-removed', onDisplaysChanged);
   screen.on('display-metrics-changed', onDisplaysChanged);
-  const hidden = process.argv.includes('--hidden') || cfg().startHidden;
-  if (!hidden) openSettings();
-  log.info('boot complete', { version: app.getVersion(), hidden });
+  // very first start always opens the window so new users can customize right away
+  const firstRun = state.store.isNew;
+  if (firstRun) state.store.flush(); // persist now so only the very first start counts as first
+  const hidden = !firstRun && (process.argv.includes('--hidden') || cfg().startHidden);
+  if (!hidden) openSettings({ front: true });
+  log.info('boot complete', { version: app.getVersion(), hidden, firstRun });
   if (cfg().checkUpdates) setTimeout(runUpdateCheck, UPDATE_CHECK_DELAY_MS);
 }
 
