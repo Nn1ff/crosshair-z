@@ -39,9 +39,6 @@
 .btn:active:not(:disabled), .dock-btn:active { scale: .97; }
 .dock-btn { transition-property: color, background-color, border-color, box-shadow, scale; }
 
-/* Power toggle: jelly bounce when switched on */
-.power input:checked + .power-btn { animation: cz-jelly .4s ease; }
-.power-btn { transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast), box-shadow .2s ease; }
 
 /* Disclosure content drops in */
 .more[open] > :not(summary),

@@ -294,7 +294,7 @@ function refreshTray() {
   }));
   state.tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Show crosshair', type: 'checkbox', checked: c.enabled, click: () => mutate((n) => (n.enabled = !n.enabled)) },
+      { label: 'Show crosshair', type: 'checkbox', checked: c.enabled, click: () => { state.launchHidden = false; state.kbAlt = false; mutate((n) => (n.enabled = !n.enabled)); } },
       { label: 'Crosshairs', submenu: profileItems },
       { type: 'separator' },
       { label: 'Open Crosshair Z', click: () => openSettings() },
@@ -314,10 +314,23 @@ function equip(id) {
   });
 }
 
+/**
+ * Show/hide hotkey. In 'hide' mode it drives the same `enabled` flag as the app's switch, so
+ * switching off in the app and on via hotkey (or vice versa) always works. When the crosshair is
+ * off, any mode's hotkey turns it back on. 'switch' mode otherwise swaps to the alternate profile.
+ */
 function keyboardToggle() {
-  if (state.launchHidden) state.launchHidden = false;
-  else state.kbAlt = !state.kbAlt;
-  log.info('keyboard toggle', { alt: state.kbAlt, mode: cfg().toggle.mode });
+  const c = cfg();
+  if (state.launchHidden) {
+    state.launchHidden = false;
+    if (!c.enabled) mutate((n) => (n.enabled = true));
+  } else if (c.toggle.mode === 'hide' || !c.enabled) {
+    state.kbAlt = false;
+    mutate((n) => (n.enabled = !c.enabled));
+  } else {
+    state.kbAlt = !state.kbAlt;
+  }
+  log.info('keyboard toggle', { enabled: cfg().enabled, alt: state.kbAlt, mode: c.toggle.mode });
   layoutOverlay();
   sendTo(state.settings, 'runtime:changed', runtime());
 }
@@ -535,6 +548,11 @@ function registerIpc() {
 
   handle('config:patch', (p) => {
     if (!p || typeof p !== 'object') throw new Error('patch must be object');
+    // switching on in the app must win over launch-hidden / hotkey-hidden state
+    if (p.enabled === true) {
+      state.launchHidden = false;
+      if (cfg().toggle.mode === 'hide') state.kbAlt = false;
+    }
     const out = mutate((n) => applyPatch(n, p));
     if (typeof p.launchAtLogin === 'boolean') applyLoginItem();
     if (p.toggle || p.rightClick) {
