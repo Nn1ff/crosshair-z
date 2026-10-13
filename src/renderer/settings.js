@@ -118,21 +118,24 @@
 
   // ---------- library / saved ----------
 
+  /** Card for one saved crosshair: click equips, double-click opens the designer, bookmark removes. */
+  function savedCard(p) {
+    const active = p.id === ui.config.activeProfileId;
+    const sc = p.hotkey ? el('div', { class: 'shortcut' }, prettyAccel(p.hotkey)) : null;
+    const li = card(p.id === ui.draftId ? ui.draft : p.crosshair, p.name, active ? 'equipped' : '', active, sc, {
+      marked: true,
+      onMark: () => {},
+      onUnmark: () => unsaveOne(p),
+    });
+    li.addEventListener('click', () => activate(p.id));
+    li.addEventListener('dblclick', () => showPage('designer'));
+    return li;
+  }
+
+  /** Saved page grid + the "Your crosshairs" strip on Discover. */
   function renderProfiles() {
-    const list = $('profileList');
-    list.replaceChildren();
-    for (const p of ui.config.profiles) {
-      const active = p.id === ui.config.activeProfileId;
-      const sc = p.hotkey ? el('div', { class: 'shortcut' }, prettyAccel(p.hotkey)) : null;
-      const li = card(p.id === ui.draftId ? ui.draft : p.crosshair, p.name, active ? 'equipped' : '', active, sc, {
-        marked: true,
-        onMark: () => {},
-        onUnmark: () => unsaveOne(p),
-      });
-      li.addEventListener('click', () => activate(p.id));
-      li.addEventListener('dblclick', () => showPage('designer'));
-      list.append(li);
-    }
+    $('profileList').replaceChildren(...ui.config.profiles.map(savedCard));
+    $('savedStrip').replaceChildren(...ui.config.profiles.map(savedCard));
     $('activeName').textContent = activeProfile().name;
     drawThumb($('currentThumb'), ui.draft || activeProfile().crosshair, 44, 44);
   }
