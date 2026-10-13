@@ -3,7 +3,8 @@
 /*
  * Builds src/shared/default-pack.json from the local community backup of game crosshairs
  * (<games dir>/<game>/<list>.json, items[] = { name, pos?, crosshairId: Crosshair X model[] }).
- * Each game/list becomes one library category ("CS2 pros", "Rust community", …).
+ * Each game/list becomes one library category ("CS2 pros", "Rust creators", …). Only the lists in
+ * LISTS are shipped; community lists are left out.
  * Designs with image layers or that fail to convert are skipped; exact repeats (same name
  * and design) within a category are kept once. Stored as compact CZ2 share codes.
  *
@@ -17,9 +18,9 @@ const { convertCrosshairX } = require('../src/shared/crosshairx-import');
 const OUT = path.join(__dirname, '..', 'src', 'shared', 'default-pack.json');
 const DEFAULT_SRC = path.join(__dirname, '..', '..', 'crosshair y', 'community-backup', 'crosshairs', 'games');
 
-/** Shipping order and display names; unknown games/lists are appended after these. */
+/** Shipping order and display names; unknown games are appended after these. */
 const GAMES = [['cs2', 'CS2'], ['valorant', 'Valorant'], ['fortnite', 'Fortnite'], ['rust', 'Rust']];
-const LISTS = [['pros', 'pros'], ['creators', 'creators'], ['community', 'community']];
+const LISTS = [['pros', 'pros'], ['creators', 'creators']];
 
 function ordered(names, known) {
   const keys = known.map(([k]) => k);
@@ -71,7 +72,8 @@ function main() {
   const pack = [];
   const games = fs.readdirSync(src).filter((g) => fs.statSync(path.join(src, g)).isDirectory());
   for (const game of ordered(games, GAMES)) {
-    const lists = fs.readdirSync(path.join(src, game)).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5));
+    const lists = fs.readdirSync(path.join(src, game)).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5))
+      .filter((l) => LISTS.some(([k]) => k === l));
     for (const list of ordered(lists, LISTS)) {
       const category = `${label(game, GAMES)} ${label(list, LISTS)}`;
       const entries = packList(path.join(src, game, `${list}.json`), category, stats);
