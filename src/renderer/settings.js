@@ -124,7 +124,11 @@
     for (const p of ui.config.profiles) {
       const active = p.id === ui.config.activeProfileId;
       const sc = p.hotkey ? el('div', { class: 'shortcut' }, prettyAccel(p.hotkey)) : null;
-      const li = card(p.id === ui.draftId ? ui.draft : p.crosshair, p.name, active ? 'equipped' : '', active, sc);
+      const li = card(p.id === ui.draftId ? ui.draft : p.crosshair, p.name, active ? 'equipped' : '', active, sc, {
+        marked: true,
+        onMark: () => {},
+        onUnmark: () => unsaveOne(p),
+      });
       li.addEventListener('click', () => activate(p.id));
       li.addEventListener('dblclick', () => showPage('designer'));
       list.append(li);
@@ -206,6 +210,21 @@
     if (cfg) {
       applyConfig(cfg, true);
       toast(`Removed "${name}" from Saved`);
+    }
+  }
+
+  /** Bookmark on a Saved card: remove just this crosshair (the last one always stays). */
+  async function unsaveOne(p) {
+    if (ui.config.profiles.length <= 1) {
+      toast(`"${p.name}" is your only saved crosshair and stays in Saved`, true);
+      return;
+    }
+    if (p.hotkey && !window.confirm(`"${p.name}" has a hotkey. Remove it from Saved anyway?`)) return;
+    flushPush();
+    const cfg = await call('profile:delete', p.id);
+    if (cfg) {
+      applyConfig(cfg, true);
+      toast(`Removed "${p.name}" from Saved`);
     }
   }
 
@@ -358,6 +377,13 @@
     launched: (u) => `Starting ${u.version}…`,
     error: (u) => u.error || 'Update failed.',
   };
+
+  /** Header version ("1.8") from the running app, so it never goes stale. */
+  function renderVersion() {
+    const v = ui.runtime && ui.runtime.update && ui.runtime.update.current;
+    const m = typeof v === 'string' && /^(\d+)\.(\d+)/.exec(v);
+    if (m) $('appVersion').textContent = `${m[1]}.${m[2]}`;
+  }
 
   /** Updates block + rail badge, driven by runtime.update from main. */
   function renderUpdate() {
@@ -715,6 +741,7 @@
     ui.defaults = res.defaults || {};
     applyConfig(res.config, true);
     renderUpdate();
+    renderVersion();
     showPage('discover');
     loadMonitors();
     scanCx();
