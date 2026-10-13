@@ -105,3 +105,13 @@ test('ring dot → circle in dot color; square dot not rotated with lines; thick
   assert.deepStrictEqual([noLines.length, noLines[0].lines.enabled, noLines[0].dot.enabled], [1, false, true]);
   assert.throws(() => convertCrosshairX(sample({ line: { length: 0, opacity: 0 } }), 'x'), /no visible parts/);
 });
+
+test('line blur stays off the dot; outline with thickness 0 renders 1px like X (Oilrats)', () => {
+  const l = convertCrosshairX(sample({
+    dot: { diameter: 4, opacity: 1, color: '#00A2FF', shape: 'circle', blur: 0 },
+    line: { length: 0, thickness: 0, offset: 0, opacity: 0, color: '#0C9A9C', blur: 20, rotation: 360 },
+    outline: { thickness: 0, opacity: 1, color: '#000000', blur: 0 },
+  }), 'x').crosshair.layers;
+  assert.strictEqual(l.length, 1);
+  assert.deepStrictEqual([l[0].blur, l[0].rotation, l[0].dot.enabled, l[0].outline.enabled, l[0].outline.thickness], [0, 0, true, true, 1]);
+});

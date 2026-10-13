@@ -66,9 +66,12 @@ function convertModel(m, index, pos) {
   const linesOn = lineOpacity > 0 && num(line.length) > 0 && thickness > 0 && visible.length > 0;
   const diameter = Math.round(num(dot.diameter, 2));
   const dotOn = dotOpacity > 0 && diameter > 0;
-  const outlineOn = num(outline.thickness) > 0 && num(outline.opacity) > 0;
+  // X draws the outline whenever it is visible; thickness 0 still renders 1px (crispThickness)
+  const outlineOn = num(outline.opacity) > 0;
   const ring = dot.shape === 'ring';
-  const rotation = Math.round(num(line.rotation));
+  const rotation = ((Math.round(num(line.rotation)) % 360) + 540) % 360 - 180; // 360 → 0, 270 → -90
+  const lineBlur = Math.round(num(line.blur));
+  const dotBlur = Math.round(num(dot.blur));
   const lineColor = color(line.color, '#ffffff');
   const dotColor = color(dot.color, '#ffffff');
   if (linesOn && line.shape && line.shape !== 'rectangle') warnings.push(`line shape "${line.shape}" drawn as rectangle`);
@@ -84,7 +87,7 @@ function convertModel(m, index, pos) {
     color: lineColor,
     rotation,
     scale,
-    blur: Math.round(Math.max(num(line.blur), num(dot.blur))),
+    blur: linesOn ? lineBlur : dotBlur, // X blurs lines and dot separately
     lines: {
       enabled: linesOn,
       length: Math.round(num(line.length)),
@@ -108,14 +111,14 @@ function convertModel(m, index, pos) {
   const outlineFor = (layerOpacity) => ({
     enabled: outlineOn,
     // X scales the outline with the layer, Z draws it unscaled
-    thickness: Math.max(1, Math.round(num(outline.thickness, 1) * scale)),
+    thickness: Math.max(1, Math.round(Math.max(1, Math.round(num(outline.thickness, 1))) * scale)),
     color: color(outline.color, '#000000'),
     opacity: layerOpacity > 0 ? Math.min(1, num(outline.opacity, 1) / layerOpacity) : 1,
   });
 
   const layers = [];
   const dotRotates = !ring && dot.shape !== 'circle' && rotation % 90 !== 0;
-  const shared = !linesOn || (Math.abs(lineOpacity - dotOpacity) < 0.001 && !(ring && dotColor !== lineColor) && !dotRotates);
+  const shared = !linesOn || (Math.abs(lineOpacity - dotOpacity) < 0.001 && !(ring && dotColor !== lineColor) && !dotRotates && lineBlur === dotBlur);
   if (linesOn) {
     const withDot = dotOn && shared;
     layers.push({ ...base, opacity: lineOpacity, ...(withDot ? dotPart : {}), outline: outlineFor(lineOpacity) });
@@ -125,7 +128,8 @@ function convertModel(m, index, pos) {
       ...base,
       name: linesOn ? `Layer ${index + 1} dot` : base.name,
       color: ring ? dotColor : base.color,
-      rotation: linesOn ? 0 : base.rotation,
+      rotation: 0, // X never rotates the dot
+      blur: dotBlur,
       opacity: dotOpacity,
       lines: { ...base.lines, enabled: false },
       ...dotPart,
