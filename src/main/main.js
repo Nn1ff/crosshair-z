@@ -512,6 +512,11 @@ async function removeStaleLoginItems() {
  * wiped on exit, so the login item must point at the original portable exe instead.
  */
 function applyLoginItem() {
+  // Dev runs (`electron .`) share the entry name; they would point autostart at electron.exe.
+  if (!app.isPackaged) {
+    log.info('login item untouched (not a packaged build)');
+    return;
+  }
   const path = LAUNCH_EXE;
   const openAtLogin = cfg().launchAtLogin;
   removeStaleLoginItems().catch((err) => log.warn('autostart cleanup failed', { error: err.message }));
