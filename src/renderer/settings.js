@@ -556,19 +556,32 @@
 
   const DISCOVER_COUNT = 12;
 
-  /** Round-robin over preset categories so every game shows up on Discover. */
+  /** Fisher–Yates shuffle into a new array. */
+  function shuffled(arr) {
+    const out = arr.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+
+  /**
+   * Random picks, fresh on every visit: round-robin over shuffled preset categories so every
+   * game is always represented, then shuffled so no game is always first.
+   */
   function discoverPicks() {
     const byCat = new Map();
     for (const p of ui.presets) {
       if (!byCat.has(p.category)) byCat.set(p.category, []);
       byCat.get(p.category).push(p);
     }
-    const lists = [...byCat.values()];
+    const lists = [...byCat.values()].map(shuffled);
     const out = [];
     for (let i = 0; out.length < DISCOVER_COUNT && lists.some((l) => i < l.length); i++) {
       for (const l of lists) if (i < l.length && out.length < DISCOVER_COUNT) out.push(l[i]);
     }
-    return out;
+    return shuffled(out);
   }
 
   function showPage(page) {
