@@ -623,7 +623,7 @@ function registerProfileIpc() {
 
 function registerIpc() {
   const pack = loadDefaultPack();
-  log.info('starter pack loaded', { count: pack.length });
+  log.info('game presets loaded', { count: pack.length });
   handle('config:get', () => ({ config: cfg(), hotkeyStatus: state.hotkeyStatus, presets: pack, runtime: runtime(), defaults: DEFAULT_HOTKEYS }));
 
   handle('config:patch', (p) => {

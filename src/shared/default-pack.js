@@ -1,12 +1,13 @@
 'use strict';
 
 /**
- * Starter pack shipped with the app (src/shared/default-pack.json, built by scripts/build-default-pack.js).
- * Entries are CZ2 share codes; invalid entries are skipped, never fatal.
+ * Game crosshair presets shipped with the app (src/shared/default-pack.json, built by scripts/build-default-pack.js).
+ * Entries are CZ2 share codes grouped by category ("CS2 pros", …); invalid entries are skipped, never fatal.
  */
 const core = require('./crosshair-core');
 
-const PACK_CATEGORY = 'Starter pack';
+const FALLBACK_CATEGORY = 'Presets';
+const MAX_NAME = 40;
 
 /** @returns {{name: string, category: string, crosshair: object}[]} */
 function loadDefaultPack() {
@@ -21,7 +22,8 @@ function loadDefaultPack() {
   const out = [];
   for (const entry of raw) {
     try {
-      out.push({ name: String(entry.name || 'Crosshair').slice(0, 40), category: PACK_CATEGORY, crosshair: core.decodeShareCode(entry.code) });
+      const category = typeof entry.category === 'string' && entry.category.trim() ? entry.category.trim().slice(0, MAX_NAME) : FALLBACK_CATEGORY;
+      out.push({ name: String(entry.name || 'Crosshair').slice(0, MAX_NAME), category, crosshair: core.decodeShareCode(entry.code) });
     } catch (err) {
       console.warn('skipping invalid default pack entry:', entry && entry.name, err.message);
     }
@@ -29,4 +31,4 @@ function loadDefaultPack() {
   return out;
 }
 
-module.exports = { loadDefaultPack, PACK_CATEGORY };
+module.exports = { loadDefaultPack };

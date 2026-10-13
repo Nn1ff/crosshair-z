@@ -42,7 +42,7 @@
   const CX_COLLECTION = 'Crosshair X';
   const CATEGORY_ICONS = {
     All: 'grid', Classic: 'shape', Dot: 'dot', Circle: 'ring', 'T-Shape': 'tshape', Sniper: 'scope',
-    Dynamic: 'pulse', Layered: 'stack', Stylized: 'spark', [CX_COLLECTION]: 'import', Workshop: 'share', 'Starter pack': 'reticle',
+    Dynamic: 'pulse', Layered: 'stack', Stylized: 'spark', [CX_COLLECTION]: 'import', Workshop: 'share',
   };
 
   const $ = (id) => document.getElementById(id);
@@ -133,8 +133,8 @@
   }
 
   /**
-   * Library entries: shipped starter pack (ui.presets) plus this user's own Crosshair X crosshairs.
-   * Crosshair X entries identical to a starter-pack design are not listed twice.
+   * Library entries: shipped game presets (ui.presets) plus this user's own Crosshair X crosshairs.
+   * Crosshair X entries identical to a shipped preset are not listed twice.
    */
   function libraryItems() {
     const prints = new Set(ui.presets.map((p) => JSON.stringify(p.crosshair)));
@@ -169,7 +169,7 @@
     const prints = savedPrints();
     $('presetList').replaceChildren(...shown.map((p) => {
       const marked = prints.has(JSON.stringify(p.crosshair));
-      const li = card(p.crosshair, p.name, ui.category === 'All' && p.category !== 'Starter pack' ? p.category : '', false, null, {
+      const li = card(p.crosshair, p.name, ui.category === 'All' ? p.category : '', false, null, {
         marked,
         onMark: () => saveProfile(p.name, p.crosshair),
       });
@@ -554,9 +554,26 @@
     return Object.keys(GROUPS).find((g) => GROUPS[g].some(([p]) => p === page)) || 'crosshairs';
   }
 
+  const DISCOVER_COUNT = 12;
+
+  /** Round-robin over preset categories so every game shows up on Discover. */
+  function discoverPicks() {
+    const byCat = new Map();
+    for (const p of ui.presets) {
+      if (!byCat.has(p.category)) byCat.set(p.category, []);
+      byCat.get(p.category).push(p);
+    }
+    const lists = [...byCat.values()];
+    const out = [];
+    for (let i = 0; out.length < DISCOVER_COUNT && lists.some((l) => i < l.length); i++) {
+      for (const l of lists) if (i < l.length && out.length < DISCOVER_COUNT) out.push(l[i]);
+    }
+    return out;
+  }
+
   function showPage(page) {
     if (page === 'discover' && ui.config) {
-      $('discoverCards').replaceChildren(...ui.presets.slice(0, 10).map(p => {
+      $('discoverCards').replaceChildren(...discoverPicks().map(p => {
         const item = card(p.crosshair, p.name, p.category, false);
         item.addEventListener('click', () => createProfile(p.name, p.crosshair));
         return item;

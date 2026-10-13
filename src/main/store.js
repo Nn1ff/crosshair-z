@@ -71,7 +71,7 @@ function obj(v) {
 }
 
 function defaultConfig() {
-  // New users start with the first starter-pack crosshair (fallback: built-in preset).
+  // New users start with the first shipped game preset (fallback: built-in preset).
   const first = loadDefaultPack()[0] || core.PRESETS[0];
   const profiles = [{ id: newId(), name: first.name, hotkey: '', crosshair: first.crosshair }];
   return {

@@ -137,13 +137,15 @@ test('dedupeProfiles keeps one per design, prefers active/hotkey, keeps order', 
   assert.strictEqual(fingerprint({ layers: [{ color: '#FF0000' }] }), fingerprint(red));
 });
 
-test('starter pack decodes completely and new configs start from it', () => {
+test('game presets decode completely and new configs start from it', () => {
   const { loadDefaultPack } = require('../src/shared/default-pack');
   const raw = require('../src/shared/default-pack.json');
   const pack = loadDefaultPack();
   assert.ok(pack.length > 0);
   assert.strictEqual(pack.length, raw.length, 'every entry must decode');
   assert.deepStrictEqual(defaultConfig().profiles[0].crosshair, pack[0].crosshair);
+  const cats = new Set(pack.map((p) => p.category));
+  for (const c of ['CS2 pros', 'Valorant pros', 'Fortnite pros', 'Rust creators']) assert.ok(cats.has(c), `missing ${c}`);
 });
 
 test('toggle default is Alt+Shift+X; old untouched defaults migrate, custom keys stay', () => {
