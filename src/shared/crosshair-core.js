@@ -14,7 +14,7 @@
   const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
   const IMAGE_RE = /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/;
   const MAX_IMAGE_CHARS = 1500000;
-  const MAX_LAYERS = 8;
+  const MAX_LAYERS = 64;
   const OVERLAY_PADDING_PX = 4;
   const MIN_OVERLAY_PX = 32;
   const MAX_IMAGE_CACHE = 32;
@@ -34,7 +34,7 @@
     lines: {
       enabled: { t: 'b' },
       length: { t: 'n', min: 0, max: 100, int: true },
-      thickness: { t: 'n', min: 1, max: 20, int: true },
+      thickness: { t: 'n', min: 1, max: 40, int: true },
       gap: { t: 'n', min: -20, max: 60, int: true },
       top: { t: 'b' },
       bottom: { t: 'b' },
@@ -49,7 +49,7 @@
     },
     dot: {
       enabled: { t: 'b' },
-      size: { t: 'n', min: 1, max: 20, int: true },
+      size: { t: 'n', min: 1, max: 100, int: true },
       shape: { t: 'e', values: ['square', 'circle'] },
       color: { t: 'c' },
       useMainColor: { t: 'b' },
@@ -264,8 +264,9 @@
       ctx.fillStyle = dotColor;
       const size = px(layer.dot.size, s) + grow * 2;
       // Origin is at floor+snap; pick rect start so absolute coords are whole pixels
-      // even when dot size parity differs from line thickness parity.
-      const start = Math.floor(-size / 2 + snap) - snap;
+      // even when dot size parity differs from line thickness parity. Odd sizes center on the
+      // pixel right/below the anchor corner, like Crosshair X (Math.round(-1.5) === -1).
+      const start = Math.round(-size / 2) - snap;
       if (layer.dot.shape === 'circle') {
         ctx.beginPath();
         ctx.arc(start + size / 2, start + size / 2, size / 2, 0, Math.PI * 2);

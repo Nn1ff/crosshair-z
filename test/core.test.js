@@ -33,7 +33,7 @@ test('sanitize clamps numbers, rejects bad colors/enums/images, caps layers', ()
   assert.strictEqual(l.dot.shape, 'square');
   assert.strictEqual(l.image.src, '');
   assert.strictEqual(l.offsetX, 0);
-  assert.strictEqual(core.sanitizeCrosshair({ layers: Array(20).fill({}) }).layers.length, core.MAX_LAYERS);
+  assert.strictEqual(core.sanitizeCrosshair({ layers: Array(100).fill({}) }).layers.length, core.MAX_LAYERS);
 });
 
 test('share code roundtrip for every preset', () => {

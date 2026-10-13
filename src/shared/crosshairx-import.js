@@ -33,8 +33,22 @@ function convertFiring(fo) {
 }
 
 /**
- * Convert one Crosshair X model entry into 1–2 Z layers.
- * Dot gets its own layer when its opacity differs from the lines (Z has one opacity per layer).
+ * Crosshair X / Y "offset" is the total pixel gap between opposite arms; Z "gap" is the distance
+ * from the layer origin to each arm. Odd thickness: origin is a pixel center, so empty pixels = 2·gap + 1;
+ * even thickness: origin is a pixel corner, so empty pixels = 2·gap. Offset 0 with odd thickness
+ * means the arms meet in the center pixel (gap -1). Parity mismatches round to the nearest symmetric gap.
+ */
+function zGap(offset, thickness) {
+  const o = Math.max(0, Math.round(offset));
+  if (thickness % 2 === 1) return o === 0 ? -1 : Math.round((o - 1) / 2);
+  return Math.round(o / 2);
+}
+
+/**
+ * Convert one Crosshair X model entry into 0–2 Z layers.
+ * Z has one color/opacity/rotation per layer, so the dot gets its own layer when it cannot share
+ * the lines' layer: different opacity, a ring (drawn as Z circle in the layer color) in another color,
+ * or a non-round dot under rotated lines (X rotates only the lines, never the dot).
  * @returns {{layers: object[], warnings: string[]}}
  */
 function convertModel(m, index, pos) {
@@ -48,10 +62,17 @@ function convertModel(m, index, pos) {
 
   const lineOpacity = num(line.opacity, 1);
   const dotOpacity = num(dot.opacity, 0);
-  const linesOn = lineOpacity > 0 && num(line.length) > 0 && visible.length > 0;
-  const dotOn = dotOpacity > 0 && num(dot.diameter) > 0;
+  const thickness = Math.round(num(line.thickness, 1));
+  const linesOn = lineOpacity > 0 && num(line.length) > 0 && thickness > 0 && visible.length > 0;
+  const diameter = Math.round(num(dot.diameter, 2));
+  const dotOn = dotOpacity > 0 && diameter > 0;
   const outlineOn = num(outline.thickness) > 0 && num(outline.opacity) > 0;
-  if (line.shape && line.shape !== 'rectangle') warnings.push(`line shape "${line.shape}" drawn as rectangle`);
+  const ring = dot.shape === 'ring';
+  const rotation = Math.round(num(line.rotation));
+  const lineColor = color(line.color, '#ffffff');
+  const dotColor = color(dot.color, '#ffffff');
+  if (linesOn && line.shape && line.shape !== 'rectangle') warnings.push(`line shape "${line.shape}" drawn as rectangle`);
+  if (dotOn && dot.shape === 'diamond') warnings.push('diamond dot drawn as square');
   if (m.type && m.type !== 'model') warnings.push(`layer type "${m.type}" not supported`);
 
   const base = {
@@ -60,56 +81,57 @@ function convertModel(m, index, pos) {
     kind: 'shape',
     offsetX: Math.round(num(position.x) + num(pos.x)),
     offsetY: Math.round(num(position.y) + num(pos.y)),
-    color: color(line.color, '#ffffff'),
-    rotation: Math.round(num(line.rotation)),
+    color: lineColor,
+    rotation,
     scale,
     blur: Math.round(Math.max(num(line.blur), num(dot.blur))),
     lines: {
       enabled: linesOn,
       length: Math.round(num(line.length)),
-      thickness: Math.max(1, Math.round(num(line.thickness, 1))),
-      gap: Math.round(num(line.offset)),
+      thickness: Math.max(1, thickness),
+      gap: zGap(num(line.offset), Math.max(1, thickness)),
       top: visible.includes('top'),
       bottom: visible.includes('bottom'),
       left: visible.includes('left'),
       right: visible.includes('right'),
     },
-    dot: {
-      enabled: false,
-      size: Math.max(1, Math.round(num(dot.diameter, 2))),
-      shape: dot.shape === 'square' ? 'square' : 'circle',
-      color: color(dot.color, '#ffffff'),
-      useMainColor: false,
-    },
+    dot: { enabled: false, size: Math.max(1, diameter), shape: dot.shape === 'circle' ? 'circle' : 'square', color: dotColor, useMainColor: false },
     circle: { enabled: false },
     firing: convertFiring(m.firingOptions),
   };
+  // ring = stroked circle of the given diameter; X draws thickness 0/missing as 1px
+  const dotPart = ring
+    ? { circle: { enabled: true, radius: Math.max(1, Math.round(diameter / 2)), thickness: Math.max(1, Math.round(num(dot.thickness, 1)) || 1) } }
+    : { dot: { ...base.dot, enabled: true } };
 
   // Z composites outline under the layer opacity → divide so effective outline alpha matches.
   const outlineFor = (layerOpacity) => ({
     enabled: outlineOn,
-    thickness: Math.max(1, Math.round(num(outline.thickness, 1))),
+    // X scales the outline with the layer, Z draws it unscaled
+    thickness: Math.max(1, Math.round(num(outline.thickness, 1) * scale)),
     color: color(outline.color, '#000000'),
     opacity: layerOpacity > 0 ? Math.min(1, num(outline.opacity, 1) / layerOpacity) : 1,
   });
 
   const layers = [];
-  const sameOpacity = !linesOn || !dotOn || Math.abs(lineOpacity - dotOpacity) < 0.001;
-  if (sameOpacity) {
-    const op = linesOn ? lineOpacity : dotOn ? dotOpacity : 1;
-    layers.push({ ...base, opacity: op, dot: { ...base.dot, enabled: dotOn }, outline: outlineFor(op) });
-  } else {
-    layers.push({ ...base, opacity: lineOpacity, outline: outlineFor(lineOpacity) });
+  const dotRotates = !ring && dot.shape !== 'circle' && rotation % 90 !== 0;
+  const shared = !linesOn || (Math.abs(lineOpacity - dotOpacity) < 0.001 && !(ring && dotColor !== lineColor) && !dotRotates);
+  if (linesOn) {
+    const withDot = dotOn && shared;
+    layers.push({ ...base, opacity: lineOpacity, ...(withDot ? dotPart : {}), outline: outlineFor(lineOpacity) });
+  }
+  if (dotOn && !(linesOn && shared)) {
     layers.push({
       ...base,
-      name: `Layer ${index + 1} dot`,
+      name: linesOn ? `Layer ${index + 1} dot` : base.name,
+      color: ring ? dotColor : base.color,
+      rotation: linesOn ? 0 : base.rotation,
       opacity: dotOpacity,
       lines: { ...base.lines, enabled: false },
-      dot: { ...base.dot, enabled: true },
+      ...dotPart,
       outline: outlineFor(dotOpacity),
     });
   }
-  if (!linesOn && !dotOn) warnings.push(`layer ${index + 1} is empty`);
   return { layers, warnings };
 }
 
@@ -174,6 +196,7 @@ function convertCrosshairX(data, fallbackName) {
     warnings.push(...r.warnings);
   });
   if (layers.length > core.MAX_LAYERS) warnings.push(`only first ${core.MAX_LAYERS} layers kept`);
+  if (layers.length === 0) throw new Error('crosshair has no visible parts');
   const crosshair = core.sanitizeCrosshair({ layers });
   const named = typeof src.name === 'string' && src.name.trim();
   const name = named ? src.name.trim().slice(0, 40) : fallbackName || describe(crosshair);

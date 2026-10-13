@@ -25,7 +25,8 @@ test('maps lines, outline, scale, name', () => {
   assert.strictEqual(r.name, 'My crosshair');
   assert.strictEqual(r.crosshair.layers.length, 1);
   const l = r.crosshair.layers[0];
-  assert.deepStrictEqual([l.lines.length, l.lines.thickness, l.lines.gap], [4, 2, 2]);
+  // X offset 2 = 2 empty px between opposite arms; even thickness → Z gap 1 per side
+  assert.deepStrictEqual([l.lines.length, l.lines.thickness, l.lines.gap], [4, 2, 1]);
   assert.strictEqual(l.color, '#ffffff');
   assert.strictEqual(l.dot.enabled, false);
   assert.deepStrictEqual([l.outline.enabled, l.outline.color, l.outline.opacity], [true, '#0000ff', 0.8]);
@@ -84,4 +85,23 @@ test('unnamed crosshairs get a descriptive name', () => {
   const t = sample({ line: { length: 5, thickness: 2, offset: 2, opacity: 1, color: '#00FF00', visible: ['left', 'right', 'bottom'] } });
   delete t.name;
   assert.strictEqual(convertCrosshairX(t).name, 'Green T');
+});
+
+test('X total offset → Z per-side gap (odd/even thickness, offset 0)', () => {
+  const gap = (thickness, offset) => convertCrosshairX(sample({ line: { length: 4, thickness, offset, opacity: 1, color: '#FFFFFF' } }), 'x').crosshair.layers[0].lines.gap;
+  assert.deepStrictEqual([gap(1, 3), gap(1, 1), gap(1, 0), gap(2, 4), gap(2, 0), gap(3, 5)], [1, 0, -1, 2, 0, 2]);
+});
+
+test('ring dot → circle in dot color; square dot not rotated with lines; thickness 0 hides lines', () => {
+  const ring = convertCrosshairX(sample({ dot: { diameter: 8, thickness: 2, opacity: 1, color: '#FF0000', shape: 'ring' } }), 'x').crosshair.layers;
+  assert.strictEqual(ring.length, 2);
+  assert.deepStrictEqual([ring[1].circle.enabled, ring[1].circle.radius, ring[1].circle.thickness, ring[1].color, ring[1].dot.enabled], [true, 4, 2, '#ff0000', false]);
+  const rot = convertCrosshairX(sample({
+    dot: { diameter: 3, opacity: 1, color: '#FFFFFF', shape: 'square' },
+    line: { length: 4, thickness: 1, offset: 3, opacity: 1, color: '#FFFFFF', rotation: 45 },
+  }), 'x').crosshair.layers;
+  assert.deepStrictEqual(rot.map((l) => l.rotation), [45, 0]);
+  const noLines = convertCrosshairX(sample({ line: { length: 4, thickness: 0, offset: 2, opacity: 1 }, dot: { diameter: 2, opacity: 1, color: '#FFFFFF', shape: 'square' } }), 'x').crosshair.layers;
+  assert.deepStrictEqual([noLines.length, noLines[0].lines.enabled, noLines[0].dot.enabled], [1, false, true]);
+  assert.throws(() => convertCrosshairX(sample({ line: { length: 0, opacity: 0 } }), 'x'), /no visible parts/);
 });
