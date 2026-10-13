@@ -25,7 +25,7 @@ const ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'icon.png');
 const TRAY_ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'tray.png');
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
 const PRELOAD = path.join(__dirname, 'preload.js');
-const CAPTURE_PAGES = ['library', 'saved', 'import', 'share', 'designer', 'hotkeys', 'toggle', 'position', 'settings', 'designer:light', 'designer:game', 'designer:dark'];
+const CAPTURE_PAGES = ['discover', 'library', 'saved', 'import', 'share', 'designer', 'hotkeys', 'toggle', 'position', 'settings', 'designer:light', 'designer:game', 'designer:dark'];
 
 // Capture mode must not share profile/cache dirs with a running instance.
 if (process.env.CZ_CAPTURE_DIR) app.setPath('userData', path.join(process.env.CZ_CAPTURE_DIR, 'userdata'));
