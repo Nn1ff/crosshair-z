@@ -1,6 +1,14 @@
 # Crosshair Z
 
-Custom crosshair overlay for Windows games.
+Lightweight custom crosshair overlay for Windows games.
+
+## Lightweight
+
+- **~100 MB RAM while gaming**: closing the settings window frees it completely; only the tiny overlay keeps running
+- **Near-zero CPU**: the overlay only redraws when something changes; mouse buttons are polled only if a feature needs them (right-click mode or firing animation)
+- **No network**: no accounts, telemetry, ads or update checks; works fully offline
+- **Anti-cheat friendly**: a plain transparent window on top of the game, no DLL injection, no hooks into the game
+- **One dependency** (`koffi`), portable exe, no installer, no background services
 
 ## Features
 
