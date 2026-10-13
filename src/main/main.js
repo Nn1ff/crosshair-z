@@ -250,11 +250,11 @@ function openSettings() {
   });
   win.setMenu(null);
   win.once('ready-to-show', () => win.show());
-  win.on('close', (e) => {
-    if (!state.quitting) {
-      e.preventDefault();
-      win.hide();
-    }
+  // Destroy instead of hide: keeps the in-game footprint to the overlay only (~100 MB less).
+  // The renderer flushes pending edits on beforeunload; the tray keeps the app alive.
+  win.on('closed', () => {
+    if (state.settings === win) state.settings = null;
+    log.info('settings window closed');
   });
   win.webContents.on('render-process-gone', (_e, details) => log.error('settings renderer gone', details));
   win.webContents.on('console-message', (_e, level, message, line, source) => {
