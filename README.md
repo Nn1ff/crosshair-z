@@ -39,3 +39,8 @@ Dev aids:
 
 - Exclusive fullscreen games hide overlays; use borderless/windowed mode.
 - Crosshair X is a separate product. Crosshair Z only reads crosshair data you saved locally; it contains no Crosshair X code or assets.
+
+## Credits
+
+- Open Sans font: SIL Open Font License 1.1 (`src/renderer/fonts/OFL-LICENSE.txt`)
+- Settings gear icon: [Font Awesome Free](https://fontawesome.com) "gear", CC BY 4.0 ([license](https://fontawesome.com/license/free))
