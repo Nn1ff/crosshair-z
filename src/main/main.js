@@ -18,6 +18,7 @@ const UPDATE_CLEANUP_DELAY_MS = 15000; // old version needs a moment to quit and
 const MOVE_STEP_PX = 1;
 const APP_USER_MODEL_ID = 'com.crosshairz.app'; // = build.appId; shortcut and process must match for taskbar grouping
 const START_MENU_LINK_NAME = 'Crosshair Z.lnk';
+const LEGACY_LOGIN_ITEM_NAMES = ['electron.app.Crosshair Z']; // Run-key names used by older builds
 const ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'icon.png');
 const TRAY_ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'tray.png');
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
@@ -477,12 +478,28 @@ function registerHotkeys() {
 }
 
 /**
+ * Builds before the app id was set registered autostart under Electron's default value name, so
+ * Windows kept a second entry pointing at an old exe. Delete those names; the current entry stays.
+ */
+function removeLegacyLoginItems() {
+  if (process.platform !== 'win32') return;
+  for (const name of LEGACY_LOGIN_ITEM_NAMES) {
+    try {
+      app.setLoginItemSettings({ openAtLogin: false, name });
+    } catch (err) {
+      log.warn('removing legacy login item failed', { name, error: err.message });
+    }
+  }
+}
+
+/**
  * Register/unregister autostart. The portable build runs from a temp extraction dir that is
  * wiped on exit, so the login item must point at the original portable exe instead.
  */
 function applyLoginItem() {
   const path = LAUNCH_EXE;
   const openAtLogin = cfg().launchAtLogin;
+  removeLegacyLoginItems();
   try {
     app.setLoginItemSettings({ openAtLogin, path, args: ['--hidden'] });
     const now = app.getLoginItemSettings({ path, args: ['--hidden'] });

@@ -26,6 +26,8 @@
 
 /* Discover: staggered entrance */
 .page:not(.hidden) .featured-title,
+.page:not(.hidden) .discover-wrap .text-action,
+.page:not(.hidden) .discover-wrap .saved-strip,
 .page:not(.hidden) .discover-wrap .card-grid { animation: cz-rise-lg .6s var(--ease-soft) .32s both; }
 
 /* Tabs: underline grows in when a tab strip is (re)built */
