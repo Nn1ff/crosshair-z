@@ -15,6 +15,8 @@ const TOPMOST_REASSERT_MS = 2000;
 const UPDATE_CHECK_DELAY_MS = 5000; // after boot, so startup is never slowed by the network
 const UPDATE_HANDOVER_TIMEOUT_MS = 30000; // new version should have taken over by then
 const MOVE_STEP_PX = 1;
+const APP_USER_MODEL_ID = 'com.crosshairz.app'; // = build.appId; shortcut and process must match for taskbar grouping
+const START_MENU_LINK_NAME = 'Crosshair Z.lnk';
 const ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'icon.png');
 const TRAY_ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'tray.png');
 const RENDERER_DIR = path.join(__dirname, '..', 'renderer');
@@ -489,6 +491,36 @@ function applyLoginItem() {
   }
 }
 
+/**
+ * Portable builds are not installed, so Windows search does not know them. Keep a per-user
+ * Start Menu shortcut pointing at the launched portable exe (re-pointed after an update or move).
+ */
+function ensureStartMenuShortcut() {
+  if (process.platform !== 'win32' || !process.env.PORTABLE_EXECUTABLE_FILE) return;
+  const link = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', START_MENU_LINK_NAME);
+  try {
+    let current = null;
+    try {
+      current = shell.readShortcutLink(link).target;
+    } catch {
+      // missing or unreadable link → (re)create below
+    }
+    if (current && path.resolve(current).toLowerCase() === path.resolve(LAUNCH_EXE).toLowerCase()) return;
+    const ok = shell.writeShortcutLink(link, current ? 'replace' : 'create', {
+      target: LAUNCH_EXE,
+      cwd: path.dirname(LAUNCH_EXE),
+      icon: LAUNCH_EXE,
+      iconIndex: 0,
+      description: 'Crosshair overlay for Windows games',
+      appUserModelId: APP_USER_MODEL_ID,
+    });
+    if (ok) log.info('start menu shortcut written', { link, target: LAUNCH_EXE, previous: current });
+    else log.warn('start menu shortcut not written', { link, target: LAUNCH_EXE });
+  } catch (err) {
+    log.error('start menu shortcut failed', { link, error: err.message });
+  }
+}
+
 // ---------- IPC ----------
 
 function requireString(v, name) {
@@ -751,6 +783,7 @@ function bootCapture(dir) {
 
 function boot() {
   if (process.env.CZ_CAPTURE_DIR) return bootCapture(process.env.CZ_CAPTURE_DIR);
+  if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID);
   state.store = new ConfigStore(app.getPath('userData'), log);
   state.mouse = createMousePoller(log);
   state.launchHidden = cfg().hideOnLaunch;
@@ -759,6 +792,7 @@ function boot() {
   createTray();
   registerHotkeys();
   applyLoginItem();
+  ensureStartMenuShortcut();
   startTopmostWatch();
   updateMousePolling();
   screen.on('display-added', onDisplaysChanged);
