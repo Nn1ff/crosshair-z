@@ -6,7 +6,7 @@
  * Each game/list becomes one library category ("CS2 pros", "Rust creators", …). Only the lists in
  * LISTS are shipped; community lists are left out.
  * Designs with image layers or that fail to convert are skipped; exact repeats (same name
- * and design) within a category are kept once. Stored as compact CZ2 share codes.
+ * and design) within a category are kept once. Stored as compact CZ3 share codes.
  *
  * Usage: node scripts/build-default-pack.js [gamesDir]
  */

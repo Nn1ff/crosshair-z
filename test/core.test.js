@@ -14,22 +14,47 @@ test('sanitize fills defaults from garbage', () => {
 
 test('legacy flat crosshair becomes single layer', () => {
   const ch = core.sanitizeCrosshair({ color: '#ff0000', lines: { gap: 7 } });
+  assert.strictEqual(ch.version, core.SCHEMA_VERSION);
   assert.strictEqual(ch.layers.length, 1);
-  assert.strictEqual(ch.layers[0].color, '#ff0000');
-  assert.strictEqual(ch.layers[0].lines.gap, 7);
+  assert.strictEqual(ch.layers[0].lines.color, '#ff0000');
+  assert.strictEqual(ch.layers[0].lines.offset, 14); // per-side gap 7, even thickness
+});
+
+test('v2 layers upgrade: gap → offset, opacity/blur per part, circle → ring, dot+circle split', () => {
+  const ch = core.sanitizeCrosshair({ layers: [
+    { color: '#112233', opacity: 0.5, blur: 2, lines: { gap: 2, thickness: 1 }, outline: { opacity: 0.5 } },
+    { lines: { gap: -1, thickness: 3 } },
+    { color: '#ff0000', lines: { enabled: false }, circle: { enabled: true, radius: 9, thickness: 2 } },
+    { name: 'Both', lines: { enabled: false }, dot: { enabled: true }, circle: { enabled: true } },
+    { rotation: 45, dot: { enabled: true } },
+  ] });
+  const [a, b, ring, bothRing, bothDot, turned] = ch.layers;
+  assert.deepStrictEqual([a.lines.offset, a.lines.color, a.lines.opacity, a.lines.blur, a.outline.opacity, a.outline.blur], [5, '#112233', 0.5, 2, 0.25, 2]);
+  assert.strictEqual(b.lines.offset, 0);
+  assert.deepStrictEqual([ring.dot.enabled, ring.dot.shape, ring.dot.size, ring.dot.thickness, ring.lines.color], [true, 'ring', 18, 2, '#ff0000']);
+  assert.deepStrictEqual([ch.layers.length, bothRing.dot.shape, bothDot.dot.shape, bothDot.name], [6, 'ring', 'square', 'Both dot']);
+  assert.deepStrictEqual([turned.rotation, turned.dot.shape], [45, 'diamond']);
+});
+
+test('v3 layers stay v3; old defaults equal new defaults', () => {
+  assert.deepStrictEqual(core.sanitizeCrosshair({ layers: [{}] }).layers[0], plain(core.DEFAULT_LAYER));
+  const ch = core.sanitizeCrosshair({ layers: [{ lines: { offset: 3, color: '#abcdef' } }] });
+  assert.deepStrictEqual([ch.layers[0].lines.offset, ch.layers[0].lines.color], [3, '#abcdef']);
+  assert.deepStrictEqual(core.sanitizeCrosshair(ch), ch);
 });
 
 test('sanitize clamps numbers, rejects bad colors/enums/images, caps layers', () => {
   const l = core.sanitizeLayer({
-    opacity: 5, scale: -1, color: 'red', lines: { length: 1e9, thickness: 'abc', gap: 2.6 }, dot: { shape: 'star' },
+    scale: -1, lines: { color: 'red', opacity: 5, length: 1e9, thickness: 'abc', offset: 2.6, shape: 'star' }, dot: { shape: 'star' },
     image: { src: 'javascript:alert(1)' }, offsetX: null,
   });
-  assert.strictEqual(l.opacity, 1);
+  assert.strictEqual(l.lines.opacity, 1);
   assert.strictEqual(l.scale, 0.25);
-  assert.strictEqual(l.color, core.DEFAULT_LAYER.color);
+  assert.strictEqual(l.lines.color, core.DEFAULT_LAYER.lines.color);
   assert.strictEqual(l.lines.length, 100);
   assert.strictEqual(l.lines.thickness, core.DEFAULT_LAYER.lines.thickness);
-  assert.strictEqual(l.lines.gap, 3);
+  assert.strictEqual(l.lines.offset, 3);
+  assert.strictEqual(l.lines.shape, 'rectangle');
   assert.strictEqual(l.dot.shape, 'square');
   assert.strictEqual(l.image.src, '');
   assert.strictEqual(l.offsetX, 0);
@@ -51,9 +76,14 @@ test('share code drops image layers, rejects image-only', () => {
   assert.throws(() => core.encodeShareCode({ layers: [img] }), /cannot be shared/);
 });
 
-test('legacy CZ1 code still decodes', () => {
-  const legacy = 'CZ1-' + Buffer.from(JSON.stringify({ color: '#123456' })).toString('base64url');
-  assert.strictEqual(core.decodeShareCode(legacy).layers[0].color, '#123456');
+test('legacy CZ1 / CZ2 codes still decode', () => {
+  const cz1 = 'CZ1-' + Buffer.from(JSON.stringify({ color: '#123456' })).toString('base64url');
+  assert.strictEqual(core.decodeShareCode(cz1).layers[0].lines.color, '#123456');
+  // CZ2 diffs were taken against the old defaults: an empty layer is the old default cross
+  const cz2 = 'CZ2-' + Buffer.from(JSON.stringify([{}, { lines: { gap: 1, thickness: 1 } }])).toString('base64url');
+  const ch = core.decodeShareCode(cz2);
+  assert.deepStrictEqual(ch.layers[0], plain(core.DEFAULT_LAYER));
+  assert.strictEqual(ch.layers[1].lines.offset, 3);
 });
 
 test('share code rejects invalid input', () => {

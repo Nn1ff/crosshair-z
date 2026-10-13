@@ -85,40 +85,41 @@
         { k: 'num', path: 'rotation', label: 'Rotation' },
       ] },
       { k: 'pair', items: [
-        { k: 'pct', path: 'opacity', label: 'Opacity' },
-        { k: 'num', path: 'blur', label: 'Blur' },
-      ] },
-    ] },
-    { id: 'style', title: 'Style', tab: 'design', showIf: (l) => l.kind === 'shape', fields: [
-      { k: 'color', path: 'color', alpha: 'opacity', label: 'Color' },
-      { k: 'pair', items: [
-        { k: 'num', path: 'rotation', label: 'Rotation' },
-        { k: 'num', path: 'blur', label: 'Blur' },
+        { k: 'pct', path: 'image.opacity', label: 'Opacity' },
+        { k: 'num', path: 'image.blur', label: 'Blur', step: 0.5 },
       ] },
     ] },
     { id: 'lines', title: 'Lines', tab: 'design', toggle: 'lines.enabled', showIf: (l) => l.kind === 'shape', fields: [
+      { k: 'color', path: 'lines.color', alpha: 'lines.opacity', label: 'Color' },
       { k: 'arms' },
+      { k: 'opts', path: 'lines.shape', label: 'Shape', values: C.LINE_SHAPES },
       { k: 'pair', items: [
         { k: 'num', path: 'lines.length', label: 'Length' },
         { k: 'num', path: 'lines.thickness', label: 'Thickness' },
       ] },
-      { k: 'pair', items: [{ k: 'num', path: 'lines.gap', label: 'Gap' }] },
+      { k: 'pair', items: [
+        { k: 'num', path: 'lines.offset', label: 'Gap' },
+        { k: 'num', path: 'rotation', label: 'Rotation' },
+      ] },
+      { k: 'pair', items: [{ k: 'num', path: 'lines.blur', label: 'Blur', step: 0.5 }] },
     ] },
     { id: 'dot', title: 'Center dot', tab: 'design', toggle: 'dot.enabled', showIf: (l) => l.kind === 'shape', fields: [
       { k: 'dotcolor' },
+      { k: 'opts', path: 'dot.shape', label: 'Shape', values: C.DOT_SHAPES },
       { k: 'pair', items: [
         { k: 'num', path: 'dot.size', label: 'Size' },
-        { k: 'opts', path: 'dot.shape', label: 'Shape', values: ['square', 'circle'] },
+        { k: 'pct', path: 'dot.opacity', label: 'Opacity' },
+      ] },
+      { k: 'pair', items: [
+        { k: 'num', path: 'dot.blur', label: 'Blur', step: 0.5 },
+        { k: 'num', path: 'dot.thickness', label: 'Ring width', showIf: (l) => l.dot.shape === 'ring' },
       ] },
     ] },
     { id: 'outline', title: 'Outline', tab: 'design', toggle: 'outline.enabled', showIf: (l) => l.kind === 'shape', fields: [
       { k: 'color', path: 'outline.color', alpha: 'outline.opacity', label: 'Color' },
-      { k: 'pair', items: [{ k: 'num', path: 'outline.thickness', label: 'Thickness' }] },
-    ] },
-    { id: 'circle', title: 'Circle', tab: 'design', toggle: 'circle.enabled', showIf: (l) => l.kind === 'shape', fields: [
       { k: 'pair', items: [
-        { k: 'num', path: 'circle.radius', label: 'Radius' },
-        { k: 'num', path: 'circle.thickness', label: 'Thickness' },
+        { k: 'num', path: 'outline.thickness', label: 'Thickness' },
+        { k: 'num', path: 'outline.blur', label: 'Blur', step: 0.5 },
       ] },
     ] },
     { id: 'firing', title: 'Firing', tab: 'animate', toggle: 'firing.enabled', fields: [
@@ -747,7 +748,14 @@
       return el('div', { class: 'pf full' }, b);
     }
 
+    /** Build a field; `showIf(layer)` hides it when false (e.g. ring width only for rings). */
     function buildField(item) {
+      const node = buildFieldNode(item);
+      if (item.showIf) st.syncers.push(() => node.classList.toggle('hidden', !item.showIf(layer())));
+      return node;
+    }
+
+    function buildFieldNode(item) {
       switch (item.k) {
         case 'num': return numField(item, false);
         case 'pct': return numField(item, true);

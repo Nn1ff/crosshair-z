@@ -2,7 +2,7 @@
 
 /**
  * Game crosshair presets shipped with the app (src/shared/default-pack.json, built by scripts/build-default-pack.js).
- * Entries are CZ2 share codes grouped by category ("CS2 pros", …); invalid entries are skipped, never fatal.
+ * Entries are share codes (CZ3; older CZ2 still decode) grouped by category ("CS2 pros", …); invalid entries are skipped, never fatal.
  */
 const core = require('./crosshair-core');
 

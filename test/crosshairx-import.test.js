@@ -25,9 +25,9 @@ test('maps lines, outline, scale, name', () => {
   assert.strictEqual(r.name, 'My crosshair');
   assert.strictEqual(r.crosshair.layers.length, 1);
   const l = r.crosshair.layers[0];
-  // X offset 2 = 2 empty px between opposite arms; even thickness → Z gap 1 per side
-  assert.deepStrictEqual([l.lines.length, l.lines.thickness, l.lines.gap], [4, 2, 1]);
-  assert.strictEqual(l.color, '#ffffff');
+  // Z uses the X/Y total offset as is
+  assert.deepStrictEqual([l.lines.length, l.lines.thickness, l.lines.offset, l.lines.shape], [4, 2, 2, 'rectangle']);
+  assert.strictEqual(l.lines.color, '#ffffff');
   assert.strictEqual(l.dot.enabled, false);
   assert.deepStrictEqual([l.outline.enabled, l.outline.color, l.outline.opacity], [true, '#0000ff', 0.8]);
   assert.strictEqual(l.scale, 1);
@@ -44,12 +44,12 @@ test('visible arms subset → T-shape', () => {
   assert.deepStrictEqual([l.lines.top, l.lines.bottom, l.lines.left, l.lines.right], [false, true, true, true]);
 });
 
-test('dot with different opacity becomes separate layer, keeps dot color', () => {
-  const r = convertCrosshairX(sample({ dot: { diameter: 3, opacity: 0.5, color: '#FF0000', shape: 'square' } }), 'x');
-  assert.strictEqual(r.crosshair.layers.length, 2);
-  const [lines, dot] = r.crosshair.layers;
-  assert.strictEqual(lines.dot.enabled, false);
-  assert.deepStrictEqual([dot.lines.enabled, dot.dot.enabled, dot.dot.size, dot.dot.shape, dot.dot.color, dot.opacity], [false, true, 3, 'square', '#ff0000', 0.5]);
+test('dot keeps its own opacity, color and blur in the same layer', () => {
+  const r = convertCrosshairX(sample({ dot: { diameter: 3, opacity: 0.5, color: '#FF0000', shape: 'square', blur: 1.5 } }), 'x');
+  assert.strictEqual(r.crosshair.layers.length, 1);
+  const { dot, lines } = r.crosshair.layers[0];
+  assert.deepStrictEqual([lines.enabled, lines.opacity], [true, 1]);
+  assert.deepStrictEqual([dot.enabled, dot.size, dot.shape, dot.color, dot.opacity, dot.blur, dot.useMainColor], [true, 3, 'square', '#ff0000', 0.5, 1.5, false]);
 });
 
 test('dot with same opacity stays in one layer', () => {
@@ -87,20 +87,18 @@ test('unnamed crosshairs get a descriptive name', () => {
   assert.strictEqual(convertCrosshairX(t).name, 'Green T');
 });
 
-test('X total offset → Z per-side gap (odd/even thickness, offset 0)', () => {
-  const gap = (thickness, offset) => convertCrosshairX(sample({ line: { length: 4, thickness, offset, opacity: 1, color: '#FFFFFF' } }), 'x').crosshair.layers[0].lines.gap;
-  assert.deepStrictEqual([gap(1, 3), gap(1, 1), gap(1, 0), gap(2, 4), gap(2, 0), gap(3, 5)], [1, 0, -1, 2, 0, 2]);
-});
-
-test('ring dot → circle in dot color; square dot not rotated with lines; thickness 0 hides lines', () => {
+test('ring / diamond dots and triangle arms map natively; rotation stays on the lines', () => {
   const ring = convertCrosshairX(sample({ dot: { diameter: 8, thickness: 2, opacity: 1, color: '#FF0000', shape: 'ring' } }), 'x').crosshair.layers;
-  assert.strictEqual(ring.length, 2);
-  assert.deepStrictEqual([ring[1].circle.enabled, ring[1].circle.radius, ring[1].circle.thickness, ring[1].color, ring[1].dot.enabled], [true, 4, 2, '#ff0000', false]);
+  assert.strictEqual(ring.length, 1);
+  assert.deepStrictEqual([ring[0].dot.shape, ring[0].dot.size, ring[0].dot.thickness, ring[0].dot.color], ['ring', 8, 2, '#ff0000']);
   const rot = convertCrosshairX(sample({
-    dot: { diameter: 3, opacity: 1, color: '#FFFFFF', shape: 'square' },
-    line: { length: 4, thickness: 1, offset: 3, opacity: 1, color: '#FFFFFF', rotation: 45 },
+    dot: { diameter: 3, opacity: 1, color: '#FFFFFF', shape: 'diamond' },
+    line: { length: 4, thickness: 1, offset: 3, opacity: 1, color: '#FFFFFF', rotation: 45, shape: 'triangle' },
   }), 'x').crosshair.layers;
-  assert.deepStrictEqual(rot.map((l) => l.rotation), [45, 0]);
+  assert.deepStrictEqual([rot.length, rot[0].rotation, rot[0].dot.shape, rot[0].lines.shape], [1, 45, 'diamond', 'triangle']);
+  const chevron = convertCrosshairX(sample({ line: { length: 4, thickness: 2, offset: 2, opacity: 1, shape: 'chevronIn' } }), 'x');
+  assert.strictEqual(chevron.crosshair.layers[0].lines.shape, 'rectangle');
+  assert.ok(chevron.warnings.some((w) => /chevronIn/.test(w)));
   const noLines = convertCrosshairX(sample({ line: { length: 4, thickness: 0, offset: 2, opacity: 1 }, dot: { diameter: 2, opacity: 1, color: '#FFFFFF', shape: 'square' } }), 'x').crosshair.layers;
   assert.deepStrictEqual([noLines.length, noLines[0].lines.enabled, noLines[0].dot.enabled], [1, false, true]);
   assert.throws(() => convertCrosshairX(sample({ line: { length: 0, opacity: 0 } }), 'x'), /no visible parts/);
@@ -113,5 +111,5 @@ test('line blur stays off the dot; outline with thickness 0 renders 1px like X (
     outline: { thickness: 0, opacity: 1, color: '#000000', blur: 0 },
   }), 'x').crosshair.layers;
   assert.strictEqual(l.length, 1);
-  assert.deepStrictEqual([l[0].blur, l[0].rotation, l[0].dot.enabled, l[0].outline.enabled, l[0].outline.thickness], [0, 0, true, true, 1]);
+  assert.deepStrictEqual([l[0].dot.blur, l[0].rotation, l[0].lines.enabled, l[0].dot.enabled, l[0].outline.enabled, l[0].outline.thickness], [0, 0, false, true, true, 1]);
 });
