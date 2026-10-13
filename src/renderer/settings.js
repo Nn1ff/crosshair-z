@@ -532,8 +532,6 @@
 
   function showPage(page) {
     if (page === 'discover' && ui.config) {
-      drawThumb($('discoverPreview'), ui.draft || activeProfile().crosshair, 240, 100);
-      $('discoverName').textContent = activeProfile().name;
       $('discoverCards').replaceChildren(...ui.presets.slice(0, 10).map(p => {
         const item = card(p.crosshair, p.name, p.category, false);
         item.addEventListener('click', () => createProfile(p.name, p.crosshair));
