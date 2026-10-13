@@ -20,6 +20,8 @@ const INVOKE_CHANNELS = new Set([
   'clipboard:write',
   'clipboard:read',
   'log:path',
+  'update:check',
+  'update:install',
 ]);
 const EVENT_CHANNELS = new Set(['config:changed', 'overlay:render', 'overlay:fire', 'hotkeys:status', 'runtime:changed']);
 

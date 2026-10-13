@@ -6,7 +6,7 @@ Lightweight custom crosshair overlay for Windows games.
 
 - **~100 MB RAM while gaming**: closing the settings window frees it completely; only the tiny overlay keeps running
 - **Near-zero CPU**: the overlay only redraws when something changes; mouse buttons are polled only if a feature needs them (right-click mode or firing animation)
-- **No network**: no accounts, telemetry, ads or update checks; works fully offline
+- **Offline-first**: no accounts, telemetry or ads. The only network use is an optional update check on startup (one small request to GitHub, can be turned off in Settings); the app works the same offline
 - **Anti-cheat friendly**: a plain transparent window on top of the game, no DLL injection, no hooks into the game
 - **One dependency** (`koffi`), portable exe, no installer, no background services
 
@@ -20,6 +20,7 @@ Lightweight custom crosshair overlay for Windows games.
 - Share codes (`CZ2-…`)
 - Import of your own saved Crosshair X crosshairs from local data files
 - Newer version launched while an older one runs → automatic handover
+- Optional update check: one-click update downloads the new portable exe next to the old one and hands over
 
 ## Development
 

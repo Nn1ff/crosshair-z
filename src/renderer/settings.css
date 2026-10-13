@@ -418,3 +418,9 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px va
 ::-webkit-scrollbar-corner { background: transparent; }
 
 
+
+/* Updates block + rail badge */
+.update-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.update-status { flex: 1 1 220px; color: var(--muted); font-size: 12px; }
+.update-status.err { color: var(--danger); }
+.rail-btn.has-update::after { content: ''; position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--coat); box-shadow: 0 0 6px rgba(124, 196, 255, .8); }

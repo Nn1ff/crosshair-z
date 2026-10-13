@@ -1,15 +1,18 @@
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, clipboard, nativeImage, dialog } = require('electron');
+const { spawn } = require('child_process');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, clipboard, nativeImage, dialog, net, shell } = require('electron');
 const core = require('../shared/crosshair-core');
 const { createLogger } = require('./logger');
 const { createMousePoller } = require('./mouse');
 const { scanCrosshairX, convertFile } = require('./crosshairx-scan');
 const { loadDefaultPack } = require('../shared/default-pack');
+const { checkForUpdate, downloadUpdate, compareVersions } = require('./updater');
 const { ConfigStore, cleanName, cleanAccel, newId, fingerprint, dedupeProfiles, DEFAULT_HOTKEYS, MAX_PROFILES } = require('./store');
 
 const TOPMOST_REASSERT_MS = 2000;
+const UPDATE_CHECK_DELAY_MS = 5000; // after boot, so startup is never slowed by the network
 const MOVE_STEP_PX = 1;
 const ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'icon.png');
 const TRAY_ICON_PATH = path.join(__dirname, '..', '..', 'assets', 'tray.png');
@@ -40,6 +43,8 @@ const state = {
   rcAlt: false, // right-click alternate active (hide or switch)
   firing: false,
   launchHidden: false, // 'hide crosshair on launch' until first toggle
+  /** status: idle | checking | none | available | downloading | error */
+  update: { status: 'idle', release: null, error: null },
 };
 
 process.on('uncaughtException', (err) => log.error('uncaughtException', err));
@@ -294,6 +299,9 @@ function refreshTray() {
   }));
   state.tray.setContextMenu(
     Menu.buildFromTemplate([
+      ...(state.update.status === 'available'
+        ? [{ label: `Update to ${state.update.release.version}`, click: () => installUpdate() }, { type: 'separator' }]
+        : []),
       { label: 'Show crosshair', type: 'checkbox', checked: c.enabled, click: () => { state.launchHidden = false; state.kbAlt = false; mutate((n) => (n.enabled = !n.enabled)); } },
       { label: 'Crosshairs', submenu: profileItems },
       { type: 'separator' },
@@ -349,7 +357,59 @@ function moveCrosshair(dx, dy) {
 }
 
 function runtime() {
-  return { kbAlt: state.kbAlt, launchHidden: state.launchHidden, mouseAvailable: state.mouse ? state.mouse.available : null };
+  const u = state.update;
+  return {
+    kbAlt: state.kbAlt,
+    launchHidden: state.launchHidden,
+    mouseAvailable: state.mouse ? state.mouse.available : null,
+    update: { status: u.status, version: u.release ? u.release.version : null, error: u.error, current: app.getVersion() },
+  };
+}
+
+// ---------- updates (optional; the app never depends on them) ----------
+
+function setUpdate(patch) {
+  state.update = { ...state.update, ...patch };
+  sendTo(state.settings, 'runtime:changed', runtime());
+  refreshTray();
+}
+
+async function runUpdateCheck() {
+  if (state.capture || ['checking', 'downloading'].includes(state.update.status)) return;
+  setUpdate({ status: 'checking', error: null });
+  try {
+    const release = await checkForUpdate({ fetchFn: (url, opts) => net.fetch(url, opts), currentVersion: app.getVersion(), log });
+    setUpdate({ status: release ? 'available' : 'none', release });
+  } catch (err) {
+    log.error('update check crashed', err);
+    setUpdate({ status: 'error', error: err.message });
+  }
+}
+
+/**
+ * Download the new portable exe next to the running one and start it; the single-instance
+ * handover then quits this version. Dev/unpacked builds just open the release page.
+ */
+async function installUpdate() {
+  const { release } = state.update;
+  if (!release || state.update.status === 'downloading') return;
+  if (!process.env.PORTABLE_EXECUTABLE_FILE) {
+    if (release.page) await shell.openExternal(release.page);
+    return;
+  }
+  setUpdate({ status: 'downloading', error: null });
+  try {
+    const exe = await downloadUpdate({ fetchFn: (url, opts) => net.fetch(url, opts), release, dir: path.dirname(LAUNCH_EXE), log });
+    const child = spawn(exe, [], { detached: true, stdio: 'ignore' });
+    child.on('error', (err) => {
+      log.error('update launch failed', { exe, error: err.message });
+      setUpdate({ status: 'error', error: `Could not start the new version: ${err.message}` });
+    });
+    child.unref();
+    log.info('update launched, waiting for handover', { exe });
+  } catch (err) {
+    setUpdate({ status: 'error', error: `Download failed: ${err.message}` });
+  }
 }
 
 const HOTKEY_ACTIONS = {
@@ -427,7 +487,7 @@ function handle(channel, fn) {
   });
 }
 
-const PATCH_FLAGS = ['enabled', 'launchAtLogin', 'startHidden', 'hideOnLaunch'];
+const PATCH_FLAGS = ['enabled', 'launchAtLogin', 'startHidden', 'hideOnLaunch', 'checkUpdates'];
 
 function applyPatch(n, p) {
   if (p.display && typeof p.display === 'object') Object.assign(n.display, p.display);
@@ -555,6 +615,7 @@ function registerIpc() {
     }
     const out = mutate((n) => applyPatch(n, p));
     if (typeof p.launchAtLogin === 'boolean') applyLoginItem();
+    if (p.checkUpdates === true && ['idle', 'error'].includes(state.update.status)) runUpdateCheck();
     if (p.toggle || p.rightClick) {
       state.kbAlt = false;
       state.rcAlt = false;
@@ -612,6 +673,8 @@ function registerIpc() {
   handle('clipboard:write', (text) => clipboard.writeText(String(text).slice(0, 10000)));
   handle('clipboard:read', () => clipboard.readText().slice(0, 10000));
   handle('log:path', () => log.file);
+  handle('update:check', () => runUpdateCheck());
+  handle('update:install', () => installUpdate());
 }
 
 // ---------- lifecycle ----------
@@ -628,6 +691,8 @@ async function captureAndQuit(dir) {
   try {
     fs.mkdirSync(dir, { recursive: true });
     await wait(2500);
+    // hidden windows freeze CSS animations at their first frame; capture the settled state
+    await state.settings.webContents.insertCSS('*, *::before, *::after { animation: none !important; transition: none !important; }');
     const shots = [['overlay', state.overlay, null], ...CAPTURE_PAGES.map((p) => [p, state.settings, p])];
     for (const [name, win, page] of shots) {
       if (page) {
@@ -682,18 +747,9 @@ function boot() {
   const hidden = process.argv.includes('--hidden') || cfg().startHidden;
   if (!hidden) openSettings();
   log.info('boot complete', { version: app.getVersion(), hidden });
+  if (cfg().checkUpdates) setTimeout(runUpdateCheck, UPDATE_CHECK_DELAY_MS);
 }
 
-/** Compare dotted versions. Returns >0 when a is newer than b. */
-function compareVersions(a, b) {
-  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
-    if (d) return d;
-  }
-  return 0;
-}
 
 /** Launched exe path (portable builds run from a temp copy; env var holds the real file). */
 const LAUNCH_EXE = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;

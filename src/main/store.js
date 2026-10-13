@@ -86,6 +86,7 @@ function defaultConfig() {
     launchAtLogin: false,
     startHidden: false,
     hideOnLaunch: false,
+    checkUpdates: true,
   };
 }
 
@@ -144,6 +145,8 @@ function sanitizeConfig(raw) {
     launchAtLogin: src.launchAtLogin === true,
     startHidden: src.startHidden === true,
     hideOnLaunch: src.hideOnLaunch === true,
+    // optional update check: on unless the user turned it off
+    checkUpdates: src.checkUpdates !== false,
   };
 }
 

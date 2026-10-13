@@ -320,6 +320,16 @@
           <label class="check"><input type="checkbox" id="hideOnLaunch">Keep the crosshair hidden until I press the show/hide shortcut</label>
         </div>
         <div class="block">
+          <h2>Updates</h2>
+          <label class="check"><input type="checkbox" id="checkUpdates">Check for updates on startup</label>
+          <p class="sub">Optional. Only asks GitHub for the latest version; Crosshair Z works the same offline.</p>
+          <div class="update-row">
+            <span id="updateStatus" class="update-status"></span>
+            <button id="btnUpdateInstall" class="btn small hidden"></button>
+            <button id="btnUpdateCheck" class="btn ghost small">Check now</button>
+          </div>
+        </div>
+        <div class="block">
           <h2>Log file</h2>
           <p class="sub">Attach this when reporting a problem.</p>
           <code id="logPath" class="path"></code>

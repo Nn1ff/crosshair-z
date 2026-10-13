@@ -328,6 +328,29 @@
     sel.value = value || '';
   }
 
+  const UPDATE_TEXT = {
+    idle: () => '',
+    checking: () => 'Checking for updates…',
+    none: (u) => `You have the latest version (${u.current}).`,
+    available: (u) => `Version ${u.version} is available (you have ${u.current}).`,
+    downloading: (u) => `Downloading ${u.version}… Crosshair Z restarts on its own when done.`,
+    error: (u) => u.error || 'Update failed.',
+  };
+
+  /** Updates block + rail badge, driven by runtime.update from main. */
+  function renderUpdate() {
+    const u = (ui.runtime && ui.runtime.update) || { status: 'idle' };
+    const text = UPDATE_TEXT[u.status] || UPDATE_TEXT.idle;
+    $('updateStatus').textContent = text(u);
+    $('updateStatus').classList.toggle('err', u.status === 'error');
+    const install = $('btnUpdateInstall');
+    install.classList.toggle('hidden', u.status !== 'available');
+    install.textContent = u.version ? `Update to ${u.version}` : 'Update';
+    $('btnUpdateCheck').disabled = u.status === 'checking' || u.status === 'downloading';
+    const rail = document.querySelector('.rail-btn[data-group="app"]');
+    if (rail) rail.classList.toggle('has-update', u.status === 'available');
+  }
+
   function renderToggle() {
     const c = ui.config;
     optionGrid('kbModes', KB_MODES, c.toggle.mode, (mode) => patch({ toggle: { mode } }));
@@ -513,7 +536,7 @@
       ui.designer.redraw();
     }
     $('enabledToggle').checked = cfg.enabled;
-    for (const k of ['launchAtLogin', 'startHidden', 'hideOnLaunch']) $(k).checked = cfg[k];
+    for (const k of ['launchAtLogin', 'startHidden', 'hideOnLaunch', 'checkUpdates']) $(k).checked = cfg[k];
     const sel = $('monitorSelect');
     if (sel.options.length) sel.value = cfg.display.monitorId == null ? '' : String(cfg.display.monitorId);
     for (const s of ui.syncers) s();
@@ -578,10 +601,13 @@
     $('monitorSelect').addEventListener('change', (e) => patch({ display: { monitorId: e.target.value === '' ? null : Number(e.target.value) } }));
     $('kbProfile').addEventListener('change', (e) => patch({ toggle: { profileId: e.target.value || null } }));
     $('rcProfile').addEventListener('change', (e) => patch({ rightClick: { profileId: e.target.value || null } }));
-    for (const key of ['launchAtLogin', 'startHidden', 'hideOnLaunch']) {
+    for (const key of ['launchAtLogin', 'startHidden', 'hideOnLaunch', 'checkUpdates']) {
       $(key).addEventListener('change', (e) => patch({ [key]: e.target.checked }));
     }
     $('enabledToggle').addEventListener('change', (e) => patch({ enabled: e.target.checked }));
+
+    $('btnUpdateCheck').addEventListener('click', () => call('update:check'));
+    $('btnUpdateInstall').addEventListener('click', () => call('update:install'));
 
     $('btnHotkeyDefaults').addEventListener('click', async () => {
       const status = await call('hotkeys:set', ui.defaults);
@@ -607,6 +633,7 @@
     window.cz.on('runtime:changed', (rt) => {
       ui.runtime = rt || {};
       renderToggle();
+      renderUpdate();
     });
     window.cz.on('hotkeys:status', (s) => {
       ui.hotkeyStatus = s || {};
@@ -635,6 +662,7 @@
     ui.runtime = res.runtime || {};
     ui.defaults = res.defaults || {};
     applyConfig(res.config, true);
+    renderUpdate();
     showPage('discover');
     loadMonitors();
     scanCx();
