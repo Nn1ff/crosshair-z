@@ -1,0 +1,2 @@
+cz-spike ready: open | hidden | close | overlay | quit
+overlay shown at 928,508 on 1920x1080

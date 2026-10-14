@@ -1,0 +1,15 @@
+cz-spike ready: open | hidden | close | quit
+[js] ready after 481 ms
+destroyed at Instant { t: 4611687572.982930303s }
+[js] ready after 338 ms
+destroyed at Instant { t: 4611687644.575514303s }
+[js] ready after 338 ms
+destroyed at Instant { t: 4611687652.619583903s }
+[js] ready after 339 ms
+destroyed at Instant { t: 4611687660.665061003s }
+[js] ready after 337 ms
+destroyed at Instant { t: 4611687668.712485503s }
+[js] ready after 329 ms
+destroyed at Instant { t: 4611687676.760282303s }
+[js] ready after 352 ms
+destroyed at Instant { t: 4611687703.533904603s }

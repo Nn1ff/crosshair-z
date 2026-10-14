@@ -1,5 +1,12 @@
 'use strict';
 
+// UMD: node (main process, tests) and browser (native settings page, after crosshair-core.js).
+(function (root, factory) {
+  const api = factory(typeof require === 'function' ? require('./crosshair-core') : root.CrosshairCore);
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.CrosshairXImport = api;
+})(typeof self !== 'undefined' ? self : this, function (core) {
+
 /**
  * Converts crosshairs saved by Crosshair X / Y (user's local JSON data files) into Crosshair Z format.
  * Works on the documented-by-example data shape only:
@@ -8,7 +15,6 @@
  * shapes and layer types), so most values map 1:1. Unsupported details (anchors, angled arc caps,
  * staged animations) are simplified with a warning.
  */
-const core = require('./crosshair-core');
 
 const ARMS = ['top', 'bottom', 'left', 'right'];
 const DEFAULT_ANIM_MS = 120;
@@ -302,4 +308,5 @@ function convertCrosshairX(data, fallbackName) {
   return { name, crosshair, warnings };
 }
 
-module.exports = { convertCrosshairX, describe };
+return { convertCrosshairX, describe };
+});

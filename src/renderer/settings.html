@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost">
 <title>Crosshair Z</title>
 <link rel="stylesheet" href="settings.css">
 <link rel="stylesheet" href="crosshair-y.css">
@@ -346,6 +346,7 @@
 <div id="toast" class="toast" role="status"></div>
 
 <script src="../shared/crosshair-core.js"></script>
+<script src="../shared/crosshairx-import.js"></script>
 <script src="common.js"></script>
 <script src="designer.js"></script>
 <script src="settings.js"></script>

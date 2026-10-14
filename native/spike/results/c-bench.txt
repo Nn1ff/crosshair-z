@@ -1,0 +1,7 @@
+cz-spike ready: open | hidden | bench | close | overlay | quit
+[js] ready after 433 ms
+[js] upload 1 MB: 17.2 / 15.6 / 16.5 ms
+[js] upload 8 MB: 91.7 / 104.0 / 105.4 ms
+[js] upload 32 MB: 393.7 / 436.6 / 400.2 ms
+[js] bench done
+destroyed at Instant { t: 4611688226.334965903s }
