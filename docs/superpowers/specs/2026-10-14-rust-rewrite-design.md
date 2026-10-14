@@ -123,7 +123,9 @@ display change ──────┘                           ▲
   `round(level * (L - 1))`, premultiplied src-over into a BGRA buffer, `UpdateLayeredWindow(ULW_ALPHA)`.
 - Animation timer runs only while some layer is moving (same as today's rAF loop); idle = 0 % CPU.
 - Window styles: `WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`.
-  Topmost reassert interval as today. Position = display center + offset (physical px), size = `size_px`.
+  Topmost reassert interval as today, each reassert = `SetWindowPos(HWND_TOPMOST)` followed by
+  `SetWindowPos(HWND_TOP)` (TOPMOST alone does not re-raise within the topmost band — spike B), plus an
+  immediate reassert on `EVENT_SYSTEM_FOREGROUND` via `SetWinEventHook`. Position = display center + offset (physical px), size = `size_px`.
 - Visibility toggle draws an empty buffer instead of hiding the window (keeps today's race fix).
 
 ## 5. Error handling
