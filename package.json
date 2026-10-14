@@ -1,7 +1,7 @@
 {
   "name": "crosshair-z",
   "productName": "Crosshair Z",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Shared UI, assets and development tools for the native Rust Crosshair Z runtime",
   "author": "Nn1ff",
   "license": "UNLICENSED",
