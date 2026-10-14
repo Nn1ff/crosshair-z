@@ -8,3 +8,4 @@ release-*/
 
 native/**/target/
 .superpowers/
+native/**/gen/
