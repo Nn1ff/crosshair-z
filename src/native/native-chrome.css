@@ -1,0 +1,8 @@
+/* Window controls for the native settings window (Electron drew these with the OS title bar overlay). */
+html.cz-native .titlebar { padding-right: 0; }
+html.cz-native .titlebar-right { padding-right: 10px; margin-left: auto; }
+.cz-wc { display: flex; align-self: stretch; }
+.cz-wc button { width: 46px; height: 100%; border: 0; border-radius: 0; padding: 0; background: transparent; color: #95a0ae; display: grid; place-items: center; cursor: default; }
+.cz-wc button:hover { background: rgba(255, 255, 255, .08); color: #e6e9ee; }
+.cz-wc button.close:hover { background: #e81123; color: #fff; }
+.cz-wc svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; shape-rendering: crispEdges; }

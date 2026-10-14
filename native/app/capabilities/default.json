@@ -1,5 +1,11 @@
 {
   "identifier": "default",
-  "windows": ["*"],
-  "permissions": ["core:default"]
+  "description": "App pages (settings, sprite renderer): IPC, events and the settings window controls.",
+  "windows": ["settings", "sprite-renderer"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-start-dragging"
+  ]
 }

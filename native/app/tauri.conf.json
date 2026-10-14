@@ -3,7 +3,7 @@
   "productName": "Crosshair Z",
   "version": "2.0.0-alpha.1",
   "identifier": "com.crosshairz.app",
-  "build": { "frontendDist": "../../src" },
+  "build": { "frontendDist": "dist" },
   "app": {
     "withGlobalTauri": true,
     "windows": [],

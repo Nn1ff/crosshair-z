@@ -4,6 +4,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -14,7 +15,7 @@ use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use crate::logger;
 
 pub const WINDOW_LABEL: &str = "sprite-renderer";
-const PAGE: &str = "native/sprite-render.html";
+const PAGE: &str = "src/native/sprite-render.html";
 pub const JOB_TIMEOUT: Duration = Duration::from_secs(10);
 pub const MAX_ATTEMPTS: u32 = 2;
 const WATCHDOG_EVERY: Duration = Duration::from_secs(1);
@@ -109,11 +110,13 @@ pub struct SpriteRenderer {
     queue: Mutex<Queue>,
     on_event: Box<dyn Fn(RenderEvent) + Send + Sync>,
     data_dir: PathBuf,
+    /// settings open: keep the page alive between edits instead of recreating it each time
+    keep_alive: AtomicBool,
 }
 
 impl SpriteRenderer {
     pub fn new(app: AppHandle, data_dir: PathBuf, on_event: Box<dyn Fn(RenderEvent) + Send + Sync>) -> Arc<SpriteRenderer> {
-        let r = Arc::new(SpriteRenderer { app, queue: Mutex::new(Queue::default()), on_event, data_dir });
+        let r = Arc::new(SpriteRenderer { app, queue: Mutex::new(Queue::default()), on_event, data_dir, keep_alive: AtomicBool::new(false) });
         let weak = Arc::downgrade(&r);
         let spawned = std::thread::Builder::new().name("sprite-watchdog".into()).spawn(move || loop {
             std::thread::sleep(WATCHDOG_EVERY);
@@ -202,8 +205,18 @@ impl SpriteRenderer {
         }
     }
 
+    pub fn set_keep_alive(&self, on: bool) {
+        self.keep_alive.store(on, Ordering::SeqCst);
+        if !on && self.queue().is_idle() {
+            self.destroy_window();
+        }
+    }
+
     fn idle(&self) {
         let idle = self.queue().is_idle();
+        if idle && self.keep_alive.load(Ordering::SeqCst) {
+            return;
+        }
         if idle {
             self.destroy_window();
             logger::info("sprite renderer idle, webview destroyed", None);

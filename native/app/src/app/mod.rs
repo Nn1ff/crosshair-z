@@ -2,11 +2,16 @@
 //! Every input (hotkey, mouse, tray, renderer, display change) arrives as an `AppEvent`.
 
 use std::collections::{BTreeMap, HashSet};
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Arc;
+mod ipc;
+mod settings;
+mod updates;
 
-use serde_json::json;
-use tauri::AppHandle;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
+use std::time::Duration;
+
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::config::{ConfigStore, Defaults, HOTKEY_ACTIONS};
 use crate::input::hotkeys::{Hotkeys, Status};
@@ -29,7 +34,32 @@ pub enum AppEvent {
     TrayEquip(String),
     Render(RenderEvent),
     DisplaysChanged,
+    /// settings page request (bridge.js → cz_invoke)
+    Ipc { channel: String, payload: Value, reply: Sender<ipc::IpcResult> },
+    OpenSettings,
+    /// user closed the settings window: let the page flush first
+    SettingsCloseRequested,
+    /// the page did not answer the close request in time
+    ForceCloseSettings,
+    SettingsClosed,
     Quit,
+}
+
+const IPC_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Managed state for `cz_invoke`.
+pub struct IpcBridge(pub Sender<AppEvent>);
+
+pub use settings::LABEL as SETTINGS_LABEL;
+
+/// The one command behind `window.cz.invoke(channel, payload)`; answered on the app thread.
+#[tauri::command]
+pub async fn cz_invoke(channel: String, payload: Value, bridge: State<'_, IpcBridge>) -> Result<Value, String> {
+    let (tx, rx) = mpsc::channel();
+    bridge.0.send(AppEvent::Ipc { channel, payload, reply: tx }).map_err(|_| "app is shutting down".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(IPC_TIMEOUT).map_err(|_| "app did not answer".to_string())?)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 const PROFILE_HOTKEY_PREFIX: &str = "profile:";
@@ -59,6 +89,8 @@ pub struct App {
     fallback: Arc<SpriteSet>,
     /// what the tray menu currently shows; rebuilt only when this changes (not on every right-click)
     tray_sig: String,
+    hotkeys_suspended: bool,
+    settings_open: bool,
 }
 
 impl App {
@@ -96,6 +128,8 @@ impl App {
             failed: HashSet::new(),
             fallback: Arc::new(SpriteSet::fallback()),
             tray_sig: String::new(),
+            hotkeys_suspended: false,
+            settings_open: false,
         })
     }
 
@@ -112,6 +146,11 @@ impl App {
         self.register_hotkeys();
         self.apply();
         self.prewarm();
+        // very first start always opens the window so new users can customize right away
+        let hidden = !self.store.is_new && (std::env::args().any(|a| a == "--hidden") || self.store.get().start_hidden);
+        if !hidden {
+            self.open_settings();
+        }
         logger::info("app ready", json!({"profiles": self.store.get().profiles.len(), "monitors": self.monitors.len()}));
         while let Ok(ev) = rx.recv() {
             if !self.handle_event(ev) {
@@ -158,6 +197,22 @@ impl App {
                 self.failed.insert(key);
                 self.apply();
             }
+            AppEvent::Ipc { channel, payload, reply } => {
+                let result = self.ipc(&channel, payload);
+                if let Err(err) = &result {
+                    logger::error(&format!("ipc {channel} failed"), json!({"error": err}));
+                }
+                let _ = reply.send(result);
+            }
+            AppEvent::OpenSettings => self.open_settings(),
+            AppEvent::SettingsCloseRequested => self.request_close_settings(),
+            AppEvent::ForceCloseSettings => {
+                if self.settings_open {
+                    logger::warn("settings page did not confirm close, closing anyway", None);
+                    self.close_settings_now();
+                }
+            }
+            AppEvent::SettingsClosed => self.on_settings_closed(),
             AppEvent::DisplaysChanged => {
                 self.monitors = monitors::list();
                 logger::info("displays changed", json!({"count": self.monitors.len()}));
@@ -192,6 +247,7 @@ impl App {
                     self.store.set(next); // switch-mode toggles only change runtime state
                 }
                 logger::info("keyboard toggle", json!({"enabled": self.store.get().enabled, "alt": self.rt.kb_alt, "saved": changed}));
+                self.emit("runtime:changed", self.runtime_value());
             }
             "next" => {
                 self.store.update(|c| state::cycle_profile(c, rt, 1));
@@ -208,7 +264,7 @@ impl App {
                 };
                 self.store.update(|c| state::move_crosshair(c, dx, dy));
             }
-            "settings" => logger::info("settings hotkey: settings window not available yet", None),
+            "settings" => self.open_settings(),
             other => logger::warn("unknown hotkey action", json!({"key": other})),
         }
         self.changed();
@@ -218,10 +274,24 @@ impl App {
     fn changed(&mut self) {
         self.apply();
         self.prewarm();
+        self.emit("config:changed", self.store.get().to_value());
+    }
+
+    /// Push an event to the settings page (if open).
+    fn emit(&self, event: &str, payload: Value) {
+        if self.settings_open {
+            if let Err(err) = self.handle.emit_to(settings::LABEL, event, payload) {
+                logger::warn("emit to settings failed", json!({"event": event, "error": err.to_string()}));
+            }
+        }
     }
 
     fn register_hotkeys(&mut self) {
         let Some(hk) = self.hotkeys.as_ref() else { return };
+        if self.hotkeys_suspended {
+            hk.register(Vec::new()); // recording a new hotkey in settings: nothing may fire
+            return;
+        }
         let c = self.store.get();
         let mut bindings: Vec<(String, String)> = HOTKEY_ACTIONS.iter().map(|a| (a.to_string(), c.hotkeys.get(a).unwrap_or("").to_string())).collect();
         bindings.extend(c.profiles.iter().filter(|p| !p.hotkey.is_empty()).map(|p| (format!("{PROFILE_HOTKEY_PREFIX}{}", p.id), p.hotkey.clone())));
@@ -230,6 +300,7 @@ impl App {
         if !problems.is_empty() {
             logger::warn("some hotkeys not registered", json!({"problems": problems}));
         }
+        self.emit("hotkeys:status", self.hotkey_status_value());
     }
 
     fn sprites_for(&mut self, crosshair: &serde_json::Value, scale: f64) -> Option<Arc<SpriteSet>> {

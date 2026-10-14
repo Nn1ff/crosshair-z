@@ -2,7 +2,7 @@
 
 use std::sync::mpsc;
 
-use crosshair_z::app::{App, AppEvent};
+use crosshair_z::app::{self, App, AppEvent, IpcBridge};
 use crosshair_z::overlay::monitors;
 use crosshair_z::sprites::renderer::{self, SpriteRenderer};
 use crosshair_z::{instance, logger, paths, tray};
@@ -24,8 +24,30 @@ fn main() {
 
     let (tx, rx) = mpsc::channel::<AppEvent>();
     let app_tx = tx.clone();
+    let window_tx = tx.clone();
     let result = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![renderer::sprite_jobs, renderer::sprite_result, renderer::sprite_failed, renderer::sprite_idle])
+        .invoke_handler(tauri::generate_handler![
+            app::cz_invoke,
+            renderer::sprite_jobs,
+            renderer::sprite_result,
+            renderer::sprite_failed,
+            renderer::sprite_idle
+        ])
+        .on_window_event(move |window, event| {
+            if window.label() != app::SETTINGS_LABEL {
+                return;
+            }
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window_tx.send(AppEvent::SettingsCloseRequested);
+                }
+                tauri::WindowEvent::Destroyed => {
+                    let _ = window_tx.send(AppEvent::SettingsClosed);
+                }
+                _ => {}
+            }
+        })
         .setup(move |app| {
             let handle = app.handle().clone();
             let render_tx = app_tx.clone();
@@ -37,6 +59,7 @@ fn main() {
                 }),
             );
             app.manage(sprite_renderer.clone());
+            app.manage(IpcBridge(app_tx.clone()));
 
             let mut core = App::new(handle.clone(), app_tx.clone(), sprite_renderer).inspect_err(|e| logger::error("app start failed", json!({"error": e})))?;
             let hidpi = monitors::list().iter().find(|m| m.primary).is_some_and(|m| m.scale_percent >= HIDPI_TRAY_PERCENT);
