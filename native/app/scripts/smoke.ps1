@@ -23,6 +23,7 @@ $cfg = @{
   profiles = @(@{ id = 'smoke'; name = $preset.name; hotkey = ''; crosshair = $preset.crosshair })
   display = @{ monitorId = $null; offsetX = 0; offsetY = 0; scale = 2 }
   hotkeys = @{ toggle = 'Ctrl+Alt+Shift+F20' }
+  startHidden = $true  # tray-only start, like autostart: no settings window
 }
 $cfg | ConvertTo-Json -Depth 32 | Set-Content -Encoding utf8 (Join-Path $data 'config.json')
 

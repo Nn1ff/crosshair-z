@@ -5,7 +5,7 @@ use std::sync::mpsc;
 use crosshair_z::app::{self, App, AppEvent, IpcBridge};
 use crosshair_z::overlay::monitors;
 use crosshair_z::sprites::renderer::{self, SpriteRenderer};
-use crosshair_z::{instance, logger, paths, tray};
+use crosshair_z::{instance, logger, paths, system, tray};
 use serde_json::json;
 use tauri::Manager;
 
@@ -17,10 +17,24 @@ fn main() {
     logger::info("boot", json!({"version": env!("CARGO_PKG_VERSION"), "dataDir": paths::data_dir().display().to_string()}));
     std::panic::set_hook(Box::new(|info| logger::error("panic", json!({"info": info.to_string()}))));
 
-    let Some(_instance) = instance::acquire() else {
-        logger::info("another instance is running, exiting", None);
-        return;
+    let _instance = match instance::acquire() {
+        Some(g) => g,
+        None => {
+            if !instance::notify_running(&instance::own_hello()) {
+                logger::info("another instance is running, exiting", None);
+                return;
+            }
+            logger::info("running instance handed over, waiting for it to quit", None);
+            match instance::take_over() {
+                Some(g) => g,
+                None => return,
+            }
+        }
     };
+    if app::integrates_with_system() {
+        // holding the mutex: any other Crosshair Z exe is a 1.x (Electron) build
+        system::stop_legacy_instances();
+    }
 
     let (tx, rx) = mpsc::channel::<AppEvent>();
     let app_tx = tx.clone();
@@ -60,6 +74,14 @@ fn main() {
             );
             app.manage(sprite_renderer.clone());
             app.manage(IpcBridge(app_tx.clone()));
+            let hello_tx = app_tx.clone();
+            instance::listen(Box::new(move |hello| {
+                let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+                if hello_tx.send(AppEvent::SecondInstance { hello, reply: reply_tx }).is_err() {
+                    return false;
+                }
+                reply_rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap_or(false)
+            }));
 
             let mut core = App::new(handle.clone(), app_tx.clone(), sprite_renderer).inspect_err(|e| logger::error("app start failed", json!({"error": e})))?;
             let hidpi = monitors::list().iter().find(|m| m.primary).is_some_and(|m| m.scale_percent >= HIDPI_TRAY_PERCENT);

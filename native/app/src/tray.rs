@@ -16,6 +16,7 @@ const MAX_MENU_PROFILES: usize = 30;
 const ID_TOGGLE: &str = "toggle";
 const ID_QUIT: &str = "quit";
 const ID_OPEN: &str = "open";
+const ID_UPDATE: &str = "update";
 const PROFILE_PREFIX: &str = "profile:";
 const ICON_1X: &[u8] = include_bytes!("../resources/tray.png");
 const ICON_2X: &[u8] = include_bytes!("../resources/tray@2x.png");
@@ -26,11 +27,12 @@ pub fn event_for(menu_id: &str) -> Option<AppEvent> {
         ID_TOGGLE => Some(AppEvent::TrayToggle),
         ID_QUIT => Some(AppEvent::Quit),
         ID_OPEN => Some(AppEvent::OpenSettings),
+        ID_UPDATE => Some(AppEvent::InstallUpdate),
         id => id.strip_prefix(PROFILE_PREFIX).map(|p| AppEvent::TrayEquip(p.to_string())),
     }
 }
 
-fn build_menu(app: &AppHandle, c: &Config) -> tauri::Result<Menu<Wry>> {
+fn build_menu(app: &AppHandle, c: &Config, update: Option<&str>) -> tauri::Result<Menu<Wry>> {
     let toggle = CheckMenuItem::with_id(app, ID_TOGGLE, "Show crosshair", true, c.enabled, None::<&str>)?;
     let profiles: Vec<CheckMenuItem<Wry>> = c
         .profiles
@@ -43,7 +45,12 @@ fn build_menu(app: &AppHandle, c: &Config) -> tauri::Result<Menu<Wry>> {
     let sep = PredefinedMenuItem::separator(app)?;
     let open = MenuItem::with_id(app, ID_OPEN, "Open Crosshair Z", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, ID_QUIT, "Quit", true, None::<&str>)?;
-    Menu::with_items(app, &[&toggle, &crosshairs, &sep, &open, &quit])
+    let menu = Menu::with_items(app, &[&toggle, &crosshairs, &sep, &open, &quit])?;
+    if let Some(version) = update {
+        menu.prepend(&PredefinedMenuItem::separator(app)?)?;
+        menu.prepend(&MenuItem::with_id(app, ID_UPDATE, format!("Update to {version}"), true, None::<&str>)?)?;
+    }
+    Ok(menu)
 }
 
 pub struct Tray {
@@ -54,7 +61,7 @@ pub struct Tray {
 impl Tray {
     pub fn create(app: &AppHandle, c: &Config, events: Sender<AppEvent>, hidpi: bool) -> tauri::Result<Tray> {
         let image = Image::from_bytes(if hidpi { ICON_2X } else { ICON_1X })?;
-        let menu = build_menu(app, c)?;
+        let menu = build_menu(app, c, None)?;
         let click_tx = events.clone();
         let icon = TrayIconBuilder::with_id("main")
             .icon(image)
@@ -77,8 +84,8 @@ impl Tray {
         Ok(Tray { icon, app: app.clone() })
     }
 
-    pub fn refresh(&self, c: &Config) {
-        match build_menu(&self.app, c) {
+    pub fn refresh(&self, c: &Config, update: Option<&str>) {
+        match build_menu(&self.app, c, update) {
             Ok(menu) => {
                 if let Err(err) = self.icon.set_menu(Some(menu)) {
                     logger::error("tray menu update failed", json!({"error": err.to_string()}));
@@ -98,6 +105,7 @@ mod tests {
         assert!(matches!(event_for("toggle"), Some(AppEvent::TrayToggle)));
         assert!(matches!(event_for("quit"), Some(AppEvent::Quit)));
         assert!(matches!(event_for("open"), Some(AppEvent::OpenSettings)));
+        assert!(matches!(event_for("update"), Some(AppEvent::InstallUpdate)));
         assert!(matches!(event_for("profile:abc"), Some(AppEvent::TrayEquip(id)) if id == "abc"));
         assert!(event_for("other").is_none());
     }

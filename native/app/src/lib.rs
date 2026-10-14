@@ -11,3 +11,5 @@ pub mod app;
 pub mod instance;
 pub mod tray;
 pub mod clipboard;
+pub mod system;
+pub mod updater;

@@ -127,9 +127,6 @@ impl App {
         })
     }
 
-    fn update_value(&self) -> Value {
-        json!({"status": "idle", "version": null, "error": null, "current": env!("CARGO_PKG_VERSION")})
-    }
 
     /// Apply a JSON-level edit, re-sanitize, save, react.
     fn set_from_value(&mut self, v: &Value) {

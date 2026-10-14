@@ -6,6 +6,8 @@ mod ipc;
 mod settings;
 mod updates;
 
+pub use updates::integrates_with_system;
+
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,6 +39,12 @@ pub enum AppEvent {
     /// settings page request (bridge.js → cz_invoke)
     Ipc { channel: String, payload: Value, reply: Sender<ipc::IpcResult> },
     OpenSettings,
+    InstallUpdate,
+    CheckUpdates,
+    Housekeeping,
+    Update(updates::UpdateEvent),
+    /// another start of the exe; reply true = hand over and quit
+    SecondInstance { hello: crate::instance::Hello, reply: Sender<bool> },
     /// user closed the settings window: let the page flush first
     SettingsCloseRequested,
     /// the page did not answer the close request in time
@@ -91,6 +99,7 @@ pub struct App {
     tray_sig: String,
     hotkeys_suspended: bool,
     settings_open: bool,
+    update: updates::UpdateState,
 }
 
 impl App {
@@ -130,6 +139,7 @@ impl App {
             tray_sig: String::new(),
             hotkeys_suspended: false,
             settings_open: false,
+            update: updates::UpdateState::default(),
         })
     }
 
@@ -151,6 +161,7 @@ impl App {
         if !hidden {
             self.open_settings();
         }
+        self.start_background_tasks();
         logger::info("app ready", json!({"profiles": self.store.get().profiles.len(), "monitors": self.monitors.len()}));
         while let Ok(ev) = rx.recv() {
             if !self.handle_event(ev) {
@@ -205,6 +216,17 @@ impl App {
                 let _ = reply.send(result);
             }
             AppEvent::OpenSettings => self.open_settings(),
+            AppEvent::InstallUpdate => self.install_update(),
+            AppEvent::CheckUpdates => self.run_update_check(),
+            AppEvent::Housekeeping => self.housekeeping(),
+            AppEvent::Update(ev) => self.on_update_event(ev),
+            AppEvent::SecondInstance { hello, reply } => {
+                let handover = self.on_second_instance(&hello);
+                let _ = reply.send(handover);
+                if handover {
+                    return false;
+                }
+            }
             AppEvent::SettingsCloseRequested => self.request_close_settings(),
             AppEvent::ForceCloseSettings => {
                 if self.settings_open {
@@ -331,14 +353,21 @@ impl App {
         }
         // until new sprites arrive the previous crosshair stays (no flash of nothing)
         self.overlay.set_visible(visible);
-        let sig = tray_signature(&c);
+        self.refresh_tray();
+        self.update_mouse_polling(&c);
+    }
+
+    /// Rebuild the tray menu only when what it shows changed (not on every right-click).
+    fn refresh_tray(&mut self) {
+        let c = self.store.get();
+        let update = (self.update.status == updates::UpdateStatus::Available).then(|| self.update.release.as_ref().map(|r| r.version.clone())).flatten();
+        let sig = format!("{}|{}", tray_signature(c), update.as_deref().unwrap_or(""));
         if sig != self.tray_sig {
             if let Some(t) = self.tray.as_ref() {
-                t.refresh(&c);
+                t.refresh(c, update.as_deref());
             }
             self.tray_sig = sig;
         }
-        self.update_mouse_polling(&c);
     }
 
     fn update_mouse_polling(&mut self, c: &crate::config::Config) {
