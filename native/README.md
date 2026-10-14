@@ -49,4 +49,5 @@ were not exhaustively tested in the release validation.
 Electron and native monitor identifiers differ: on first migration a saved monitor selection
 falls back to the primary display. Re-select the desired display in the native settings.
 Firing animation uses 33 pre-rendered levels, or 17 for larger sprite sets.
-Electron 1.8.x stays in the repository for reference and fallback builds.
+The Electron runtime and feasibility spike have been removed. Historical releases and
+the original source remain available through Git tags and history.

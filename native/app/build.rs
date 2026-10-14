@@ -1,6 +1,6 @@
 //! Stages the web files the native app embeds into `dist/` (frontendDist), keeping the repo layout
 //! so relative paths in the shared pages (`../shared/…`, `../../assets/icon.png`) keep working.
-//! Only these folders are embedded — never `src/main` (Electron) or the rest of the repo.
+//! Only these folders are embedded — development scripts and tests stay outside the app.
 
 use std::fs;
 use std::path::{Path, PathBuf};

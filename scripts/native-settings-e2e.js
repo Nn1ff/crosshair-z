@@ -104,8 +104,16 @@ async function main() {
     const displays = await page.evaluate(() => window.cz.invoke('displays:list'));
     check(displays.length >= 1 && /Display 1/.test(displays[0].label), `displays:list (${displays[0] && displays[0].label})`);
 
-    await page.evaluate(() => window.cz.invoke('clipboard:write', 'CZ-e2e-clip'));
-    check((await page.evaluate(() => window.cz.invoke('clipboard:read'))) === 'CZ-e2e-clip', 'clipboard round trip');
+    // Skip this on a user's desktop when the clipboard may contain non-text formats.
+    if (!process.argv.includes('--skip-clipboard')) {
+      const originalClipboard = await page.evaluate(() => window.cz.invoke('clipboard:read'));
+      try {
+        await page.evaluate(() => window.cz.invoke('clipboard:write', 'CZ-e2e-clip'));
+        check((await page.evaluate(() => window.cz.invoke('clipboard:read'))) === 'CZ-e2e-clip', 'clipboard round trip');
+      } finally {
+        await page.evaluate(text => window.cz.invoke('clipboard:write', text), originalClipboard);
+      }
+    }
 
     const changed = page.evaluate(() => new Promise((r) => window.cz.on('config:changed', (c) => r(c.enabled))));
     await page.evaluate(() => window.cz.invoke('config:patch', { enabled: false }));

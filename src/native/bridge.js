@@ -1,5 +1,5 @@
 /*
- * window.cz for the native (Tauri) host — same API as src/main/preload.js, so settings.js and
+ * window.cz for the native (Tauri) host — shared IPC API for settings.js and
  * designer.js run unchanged. Injected as an initialization script, before any page script.
  *
  * Work that needs crosshair-core.js stays in JS: crosshairs are sanitized before they reach Rust,

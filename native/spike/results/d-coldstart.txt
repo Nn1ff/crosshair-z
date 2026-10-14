@@ -1,9 +1,0 @@
-cz-spike ready: open | hidden | bench | close | overlay | quit
-[js] ready after 415 ms
-destroyed at Instant { t: 4611688242.669943103s }
-[js] ready after 457 ms
-destroyed at Instant { t: 4611688250.718636803s }
-[js] ready after 429 ms
-destroyed at Instant { t: 4611688258.768991103s }
-[js] ready after 383 ms
-destroyed at Instant { t: 4611688266.817507603s }
