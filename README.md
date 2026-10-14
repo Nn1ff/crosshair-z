@@ -13,6 +13,12 @@
 
 ## Download
 
+**Native Rust beta:** [2.0.0-beta.1](https://github.com/Nn1ff/crosshair-z/releases/tag/v2.0.0-beta.1)
+uses a native Windows overlay and WebView2 for settings. The measured tray-only footprint is
+5.2 MB of private working set; the portable exe is 3.85 MB. See the
+[native build and testing guide](native/README.md) for requirements and validation limits.
+The stable download below remains the Electron version during beta testing.
+
 1. Get **`Crosshair-Z.exe`** from the [latest release](https://github.com/Nn1ff/crosshair-z/releases/latest).
 2. Run it. You don't need to install anything.
 3. Pick a crosshair and play. Run the game in **borderless** or **windowed** mode (exclusive fullscreen hides overlays).
@@ -84,6 +90,9 @@ When a new version is out, Settings shows **Update**. Crosshair Z downloads the 
 **Can I use my Crosshair X crosshairs?** Yes. Saved and Workshop crosshairs from your local Crosshair X data show up under **Browse → Crosshair X**.
 
 ## Development
+
+For the Rust beta, follow [native/README.md](native/README.md). The commands below build the
+Electron version, which stays available during the beta.
 
 ```bash
 npm install

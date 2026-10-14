@@ -10,3 +10,4 @@ native/**/target/
 .superpowers/
 native/**/gen/
 native/app/dist/
+release-native/

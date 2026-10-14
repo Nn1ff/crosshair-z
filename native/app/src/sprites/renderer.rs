@@ -58,9 +58,12 @@ impl Queue {
         true
     }
 
-    /// Hand all pending jobs to the page.
-    pub fn take_all(&mut self, now: Instant) -> Vec<Job> {
-        let jobs: Vec<Job> = self.pending.drain(..).collect();
+    /// Hand one job to the sequential renderer so waiting jobs do not time out.
+    pub fn take_next(&mut self, now: Instant) -> Vec<Job> {
+        if !self.in_flight.is_empty() {
+            return Vec::new();
+        }
+        let jobs: Vec<Job> = self.pending.pop_front().into_iter().collect();
         for j in &jobs {
             *self.attempts.entry(j.key.clone()).or_insert(0) += 1;
             self.in_flight.insert(j.key.clone(), (j.clone(), now));
@@ -196,7 +199,7 @@ impl SpriteRenderer {
     }
 
     fn take_jobs(&self) -> Vec<Job> {
-        self.queue().take_all(Instant::now())
+        self.queue().take_next(Instant::now())
     }
 
     fn deliver(&self, key: &str, bytes: Vec<u8>) {
@@ -275,7 +278,7 @@ mod tests {
         assert!(q.push(job("a")));
         assert!(!q.push(job("a")));
         let t = Instant::now();
-        assert_eq!(q.take_all(t).len(), 1);
+        assert_eq!(q.take_next(t).len(), 1);
         assert!(!q.push(job("a")), "running");
         assert!(q.complete("a"));
         assert!(q.push(job("a")), "done → may render again");
@@ -286,10 +289,10 @@ mod tests {
         let mut q = Queue::default();
         q.push(job("a"));
         let t = Instant::now();
-        q.take_all(t);
+        q.take_next(t);
         assert_eq!(q.fail("a"), FailAction::Retry);
         assert!(q.has_pending());
-        q.take_all(t);
+        q.take_next(t);
         assert_eq!(q.fail("a"), FailAction::GiveUp);
         assert!(q.is_idle());
         assert_eq!(q.fail("unknown"), FailAction::GiveUp);
@@ -299,13 +302,26 @@ mod tests {
     fn success_resets_attempts() {
         let mut q = Queue::default();
         q.push(job("a"));
-        q.take_all(Instant::now());
+        q.take_next(Instant::now());
         q.fail("a");
-        q.take_all(Instant::now());
+        q.take_next(Instant::now());
         q.complete("a");
         q.push(job("a"));
-        q.take_all(Instant::now());
+        q.take_next(Instant::now());
         assert_eq!(q.fail("a"), FailAction::Retry, "fresh attempt budget");
+    }
+
+    #[test]
+    fn pending_jobs_do_not_use_the_running_jobs_timeout_budget() {
+        let mut q = Queue::default();
+        q.push(job("a"));
+        q.push(job("b"));
+        let start = Instant::now();
+        assert_eq!(q.take_next(start), vec![job("a")]);
+        assert_eq!(q.expired(start + JOB_TIMEOUT), vec!["a".to_string()]);
+        q.complete("a");
+        assert_eq!(q.take_next(start + JOB_TIMEOUT), vec![job("b")]);
+        assert!(q.expired(start + JOB_TIMEOUT).is_empty(), "the queued job receives a fresh timeout when it starts");
     }
 
     #[test]
@@ -313,7 +329,7 @@ mod tests {
         let mut q = Queue::default();
         q.push(job("a"));
         let t0 = Instant::now();
-        q.take_all(t0);
+        q.take_next(t0);
         assert!(q.expired(t0 + JOB_TIMEOUT - Duration::from_millis(1)).is_empty());
         assert_eq!(q.expired(t0 + JOB_TIMEOUT), vec!["a".to_string()]);
     }
@@ -323,7 +339,7 @@ mod tests {
         let mut q = Queue::default();
         q.push(job("a"));
         q.push(job("b"));
-        q.take_all(Instant::now());
+        q.take_next(Instant::now());
         q.push(job("c"));
         let mut keys = q.drain_all();
         keys.sort();

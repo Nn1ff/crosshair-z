@@ -46,7 +46,7 @@ fn version_of(tag: &str) -> Option<String> {
     ok.then(|| t.to_string())
 }
 
-/// > 0 when `a` is newer than `b`: dotted numbers (missing parts = 0); on equal numbers a
+/// Returns a positive number when `a` is newer than `b`: dotted numbers (missing parts = 0); on equal numbers a
 /// prerelease (`2.0.0-beta.1`) is older than the release (`2.0.0`), prereleases compare as text.
 pub fn compare_versions(a: &str, b: &str) -> i64 {
     let split = |s: &str| -> (Vec<i64>, Option<String>) {

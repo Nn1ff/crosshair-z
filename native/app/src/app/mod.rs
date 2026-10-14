@@ -48,7 +48,7 @@ pub enum AppEvent {
     /// user closed the settings window: let the page flush first
     SettingsCloseRequested,
     /// the page did not answer the close request in time
-    ForceCloseSettings,
+    ForceCloseSettings(u64),
     SettingsClosed,
     Quit,
 }
@@ -99,6 +99,7 @@ pub struct App {
     tray_sig: String,
     hotkeys_suspended: bool,
     settings_open: bool,
+    settings_close_guard: settings::CloseGuard,
     update: updates::UpdateState,
 }
 
@@ -139,6 +140,7 @@ impl App {
             tray_sig: String::new(),
             hotkeys_suspended: false,
             settings_open: false,
+            settings_close_guard: settings::CloseGuard::default(),
             update: updates::UpdateState::default(),
         })
     }
@@ -228,8 +230,8 @@ impl App {
                 }
             }
             AppEvent::SettingsCloseRequested => self.request_close_settings(),
-            AppEvent::ForceCloseSettings => {
-                if self.settings_open {
+            AppEvent::ForceCloseSettings(request) => {
+                if self.settings_open && self.settings_close_guard.consume(request) {
                     logger::warn("settings page did not confirm close, closing anyway", None);
                     self.close_settings_now();
                 }

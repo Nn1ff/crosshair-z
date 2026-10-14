@@ -91,13 +91,13 @@ impl Overlay {
                             let same = scene.set.as_ref().is_some_and(|s| Arc::ptr_eq(s, &set));
                             if !same {
                                 scene.anim.reset();
+                                moving = scene.anim.firing();
+                                last = Instant::now();
                             }
                             scene.set = Some(set);
                             scene.x = x;
                             scene.y = y;
                             scene.render(sink.as_mut());
-                            moving = scene.anim.firing() && !same;
-                            last = Instant::now();
                         }
                         Some(Msg::Visible(v)) => {
                             if scene.visible != v {
@@ -217,6 +217,33 @@ mod tests {
         ov.set_visible(false);
         std::thread::sleep(Duration::from_millis(50));
         assert_eq!(rec.count(), 2, "no frame without a change");
+    }
+
+    #[test]
+    fn relocating_cached_sprites_keeps_rise_and_decay_running() {
+        let rec = Recorder::default();
+        let ov = Overlay::spawn(Box::new(rec.clone()));
+        let mut set = (*firing_set()).clone();
+        set.layers[0].fire_speed_ms = Some(200.0);
+        let set = Arc::new(set);
+        ov.set_sprites(set.clone(), 0, 0);
+        wait_until(|| rec.count() == 1);
+
+        ov.set_firing(true);
+        ov.set_sprites(set.clone(), 10, 20);
+        wait_until(|| rec.last().3 == vec![0, 0, 0, 0xFF00_0002]);
+        assert_eq!(rec.last().3, vec![0, 0, 0, 0xFF00_0002], "relocation must not freeze the rising animation");
+        assert_eq!((rec.last().0, rec.last().1), (10, 20));
+
+        ov.set_firing(false);
+        ov.set_sprites(set, 30, 40);
+        wait_until(|| rec.last().3 == vec![0xFF00_0001, 0, 0, 0]);
+        assert_eq!(rec.last().3, vec![0xFF00_0001, 0, 0, 0], "relocation must not freeze the decaying animation");
+        assert_eq!((rec.last().0, rec.last().1), (30, 40));
+        std::thread::sleep(Duration::from_millis(250));
+        let settled = rec.count();
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(rec.count(), settled, "relocation must not keep idle animation ticking");
     }
 
     #[test]
