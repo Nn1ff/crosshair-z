@@ -111,20 +111,17 @@ The package script runs tests, builds the Rust runtime and checks the live overl
 The result is `release-native/Crosshair-Z.exe`. See [native/README.md](native/README.md)
 for toolchain requirements, isolated testing and migration details.
 
-The retained Electron 1.8.x implementation can still be built separately:
-
-```bash
-npm install
-npm start           # run the app
-npm test            # unit tests (node:test)
-npm run dist        # portable exe → release/
-npm run build:pack  # rebuild the bundled pro crosshair pack
+```powershell
+npm start           # run the native Rust app (cargo must be on PATH)
+npm test            # shared JavaScript engine, import and sprite codec tests
+npm run dist        # test and package the native portable exe
+npm run export:native # refresh generated Rust defaults after shared-engine changes
+npm run build:pack  # rebuild the bundled pro crosshair pack from its source data
 ```
 
 Dev aids:
 - `node scripts/capture-native.js` refreshes the screenshots from the real native settings UI
 - `CZ_USERDATA=<dir>` uses isolated config and instance endpoints, skipping system integration
-- Legacy Electron only: `CZ_CAPTURE_DIR=<dir>` captures its pages and quits
 
 <details>
 <summary>Project layout</summary>
@@ -132,10 +129,9 @@ Dev aids:
 ```
 native/app/     Current Rust runtime: native overlay, config, input, updater, tray and settings IPC
 src/native/     WebView2 bridge and sprite rendering/transport
-src/renderer/   Settings UI, designer, overlay renderer
+src/renderer/   Settings UI and designer
 src/shared/     Crosshair engine (schema, rendering, share codes), Crosshair X/Y import, preset pack
 test/           Unit tests
-src/main/       Retained Electron 1.8.x runtime
 ```
 </details>
 

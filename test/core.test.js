@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const core = require('../src/shared/crosshair-core');
-const { sanitizeConfig, defaultConfig, dedupeProfiles, fingerprint } = require('../src/main/store');
+
 
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
@@ -121,71 +121,15 @@ test('fire animator ramps up and down per layer speed', () => {
   assert.strictEqual(a.levels[0], 0);
 });
 
-test('config sanitize repairs broken config', () => {
-  const cfg = sanitizeConfig({
-    profiles: [{ id: 'a', name: '', hotkey: 5 }, { id: 'a' }, 5], activeProfileId: 'zzz',
-    display: { offsetX: 1e9, scale: 99 }, toggle: { mode: 'x', profileId: 'nope' }, rightClick: { mode: 'hideHold', profileId: 'a' },
-  });
-  assert.strictEqual(cfg.profiles.length, 2);
-  assert.notStrictEqual(cfg.profiles[0].id, cfg.profiles[1].id);
-  assert.strictEqual(cfg.activeProfileId, cfg.profiles[0].id);
-  assert.strictEqual(cfg.profiles[0].hotkey, '');
-  assert.strictEqual(cfg.display.offsetX, 4000);
-  assert.strictEqual(cfg.display.scale, 4);
-  assert.deepStrictEqual(cfg.toggle, { mode: 'hide', profileId: null });
-  assert.deepStrictEqual(cfg.rightClick, { mode: 'hideHold', profileId: 'a' });
-  assert.ok(sanitizeConfig(null).profiles.length > 0);
-  assert.strictEqual(defaultConfig().enabled, true);
-});
-
-test('v3 migration clears legacy optional hotkeys, keeps custom ones', () => {
-  const cfg = sanitizeConfig({
-    version: 2,
-    hotkeys: { toggle: 'F8', next: 'CommandOrControl+Shift+Right', moveUp: 'F9', settings: 'CommandOrControl+Shift+S' },
-  });
-  assert.strictEqual(cfg.hotkeys.toggle, 'F8');
-  assert.strictEqual(cfg.hotkeys.next, '');
-  assert.strictEqual(cfg.hotkeys.settings, '');
-  assert.strictEqual(cfg.hotkeys.moveUp, 'F9');
-  assert.strictEqual(defaultConfig().hotkeys.next, '');
-  // Once on v3, user may re-bind a legacy combo and it must stick.
-  assert.strictEqual(sanitizeConfig({ version: 3, hotkeys: { next: 'CommandOrControl+Shift+Right' } }).hotkeys.next, 'CommandOrControl+Shift+Right');
-});
-
-test('dedupeProfiles keeps one per design, prefers active/hotkey, keeps order', () => {
-  const red = core.sanitizeCrosshair({ layers: [{ color: '#ff0000' }] });
-  const blue = core.sanitizeCrosshair({ layers: [{ color: '#0000ff' }] });
-  const ps = [
-    { id: 'a', name: 'Red', crosshair: red },
-    { id: 'b', name: 'Blue', crosshair: blue },
-    { id: 'c', name: 'Red copy', crosshair: red, hotkey: 'F1' },
-    { id: 'd', name: 'Red again', crosshair: red },
-    { id: 'e', name: 'Blue copy', crosshair: blue },
-  ];
-  assert.deepStrictEqual(dedupeProfiles(ps, 'e').map((p) => p.id), ['c', 'e']);
-  assert.deepStrictEqual(dedupeProfiles(ps, 'zzz').map((p) => p.id), ['b', 'c']);
-  assert.strictEqual(fingerprint({ layers: [{ color: '#FF0000' }] }), fingerprint(red));
-});
-
-test('game presets decode completely and new configs start from it', () => {
+test('game presets decode completely and native defaults match', () => {
   const { loadDefaultPack } = require('../src/shared/default-pack');
   const raw = require('../src/shared/default-pack.json');
   const pack = loadDefaultPack();
   assert.ok(pack.length > 0);
   assert.strictEqual(pack.length, raw.length, 'every entry must decode');
-  assert.deepStrictEqual(defaultConfig().profiles[0].crosshair, pack[0].crosshair);
+  assert.deepStrictEqual(require('../native/app/resources/first-preset.json').crosshair, pack[0].crosshair);
   const cats = new Set(pack.map((p) => p.category));
   for (const c of ['CS2 pros', 'Valorant pros', 'Fortnite pros', 'Rust creators']) assert.ok(cats.has(c), `missing ${c}`);
-});
-
-test('toggle default is Alt+Shift+X; old untouched defaults migrate, custom keys stay', () => {
-  assert.strictEqual(defaultConfig().hotkeys.toggle, 'Alt+Shift+X');
-  assert.strictEqual(sanitizeConfig({ version: 3, hotkeys: { toggle: 'CommandOrControl+Shift+X' } }).hotkeys.toggle, 'Alt+Shift+X');
-  assert.strictEqual(sanitizeConfig({ version: 4, hotkeys: { toggle: 'Alt+Shift+Z' } }).hotkeys.toggle, 'Alt+Shift+X');
-  assert.strictEqual(sanitizeConfig({ version: 3, hotkeys: { toggle: 'Alt+Shift+Z' } }).hotkeys.toggle, 'Alt+Shift+Z');
-  assert.strictEqual(sanitizeConfig({ version: 3, hotkeys: { toggle: 'F7' } }).hotkeys.toggle, 'F7');
-  assert.strictEqual(sanitizeConfig({ version: 4, hotkeys: { toggle: 'CommandOrControl+Shift+X' } }).hotkeys.toggle, 'CommandOrControl+Shift+X');
-  assert.strictEqual(sanitizeConfig({ version: 5, hotkeys: { toggle: 'Alt+Shift+Z' } }).hotkeys.toggle, 'Alt+Shift+Z');
 });
 
 test('new arm shapes / layer kinds: sanitize, share, overlay size', () => {

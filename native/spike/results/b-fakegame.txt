@@ -1,4 +1,0 @@
---- fake game active +4s
-screen 1920x1080, red pixels in center 64x64: 0 (expected 96)
---- fake game active +8s
-screen 1920x1080, red pixels in center 64x64: 0 (expected 96)

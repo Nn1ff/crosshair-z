@@ -1,50 +1,21 @@
 {
   "name": "crosshair-z",
   "productName": "Crosshair Z",
-  "version": "1.8.7",
-  "description": "Crosshair Z",
-  "main": "src/main/main.js",
+  "version": "2.0.0",
+  "description": "Shared UI, assets and development tools for the native Rust Crosshair Z runtime",
   "author": "Nn1ff",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "start": "electron .",
+    "start": "cargo run --manifest-path native/app/Cargo.toml",
     "test": "node --test \"test/**/*.test.js\"",
-    "dist": "electron-builder --win portable",
-    "build:pack": "node scripts/build-default-pack.js"
-  },
-  "build": {
-    "appId": "com.crosshairz.app",
-    "directories": {
-      "output": "release"
-    },
-    "productName": "Crosshair Z",
-    "files": [
-      "src/**/*",
-      "assets/**/*",
-      "!assets/splash.bmp",
-      "package.json",
-      "!node_modules/koffi/build/koffi/!(win32_x64){,/**}",
-      "!node_modules/koffi/build/koffi/win32_x64/*.{exp,lib}",
-      "!node_modules/koffi/{doc,src,vendor,lib}{,/**}"
-    ],
-    "win": {
-      "target": "portable",
-      "icon": "assets/icon.png"
-    },
-    "electronLanguages": [
-      "en-US"
-    ],
-    "portable": {
-      "splashImage": "assets/splash.bmp"
-    }
+    "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File native/app/scripts/package.ps1",
+    "build:pack": "node scripts/build-default-pack.js",
+    "export:native": "node scripts/export-native-defaults.js",
+    "capture": "node scripts/capture-native.js",
+    "test:native-ui": "node scripts/native-settings-e2e.js"
   },
   "devDependencies": {
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.8",
     "playwright-core": "^1.48.2"
-  },
-  "dependencies": {
-    "koffi": "^2.16.3"
   }
 }
