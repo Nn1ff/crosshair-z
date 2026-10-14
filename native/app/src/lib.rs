@@ -7,3 +7,6 @@ pub mod state;
 pub mod sprites;
 pub mod overlay;
 pub mod input;
+pub mod app;
+pub mod instance;
+pub mod tray;

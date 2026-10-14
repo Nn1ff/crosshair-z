@@ -138,7 +138,7 @@ impl SpriteSet {
                     return Err(SpriteError::FrameBounds { layer: li, frame: fi });
                 }
                 let bytes = r.take(w as usize * h as usize * 4)?;
-                let px = bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                let px = bytes.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)).collect();
                 frames.push(Frame { x, y, w, h, px });
             }
             layers.push(SpriteLayer { fire_speed_ms: fire.then_some(speed), frames });

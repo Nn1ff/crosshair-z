@@ -37,8 +37,10 @@ fn sprites_composite_to_canvas_reference() {
         for (level, tag) in LEVELS {
             let reference: Vec<u32> = fs::read(fixtures_dir().join(format!("{id}-{tag}.bgra")))
                 .unwrap()
-                .chunks_exact(4)
-                .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| u32::from_le_bytes(*c))
                 .collect();
             assert_eq!(reference.len(), n, "{name}");
             let levels: Vec<f32> = set.layers.iter().map(|l| if l.fire_speed_ms.is_some() { level } else { 0.0 }).collect();

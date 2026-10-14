@@ -103,7 +103,7 @@ impl SpriteCache {
         if files.len() <= MAX_DISK_FILES {
             return;
         }
-        files.sort_by(|a, b| b.0.cmp(&a.0));
+        files.sort_by_key(|f| std::cmp::Reverse(f.0));
         for (_, p) in files.into_iter().skip(MAX_DISK_FILES) {
             if let Err(err) = fs::remove_file(&p) {
                 logger::warn("sprite cache prune failed", json!({"file": p.display().to_string(), "error": err.to_string()}));

@@ -164,8 +164,10 @@ mod tests {
     use crate::sprites::codec::{Frame, SpriteLayer};
     use std::sync::Mutex;
 
+    type Shown = (i32, i32, u32, Vec<u32>);
+
     #[derive(Clone, Default)]
-    struct Recorder(Arc<Mutex<Vec<(i32, i32, u32, Vec<u32>)>>>);
+    struct Recorder(Arc<Mutex<Vec<Shown>>>);
 
     impl FrameSink for Recorder {
         fn show(&mut self, x: i32, y: i32, size: u32, pixels: Vec<u32>) {
@@ -177,7 +179,7 @@ mod tests {
         fn count(&self) -> usize {
             self.0.lock().unwrap().len()
         }
-        fn last(&self) -> (i32, i32, u32, Vec<u32>) {
+        fn last(&self) -> Shown {
             self.0.lock().unwrap().last().cloned().unwrap()
         }
     }

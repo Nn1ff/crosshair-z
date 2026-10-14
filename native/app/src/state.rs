@@ -205,7 +205,7 @@ mod tests {
     fn effective_plain_and_launch_hidden() {
         let c = cfg(json!({}));
         let mut rt = Runtime::default();
-        assert_eq!(effective(&c, &rt).0, true);
+        assert!(effective(&c, &rt).0);
         assert_eq!(effective(&c, &rt).1.id, "a");
         rt.launch_hidden = true;
         assert!(!effective(&c, &rt).0);
