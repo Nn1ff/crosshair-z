@@ -1,0 +1,10 @@
+visible: True
+  WS_EX_LAYERED      True
+  WS_EX_TOPMOST      True
+  WS_EX_TRANSPARENT  True
+  WS_EX_NOACTIVATE   True
+  WS_EX_TOOLWINDOW   True
+screen 1920x1080, red pixels in center 64x64: 96 (expected 96)
+1 processes, private working set 1,5 MB
+  cz-spike                     pid 16624        1,5 MB
+CPU over 30s: 0,00 % of total machine

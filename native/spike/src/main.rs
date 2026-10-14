@@ -1,3 +1,5 @@
+mod overlay;
+
 use std::io::BufRead;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -51,6 +53,7 @@ fn stdin_loop(app: AppHandle) {
             "open" => open_webview(&app, true),
             "hidden" => open_webview(&app, false),
             "close" => close_webview(&app),
+            "overlay" => overlay::spawn(),
             "quit" => app.exit(0),
             "" => {}
             other => println!("unknown command: {other}"),
@@ -64,7 +67,7 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
             std::thread::spawn(move || stdin_loop(handle));
-            println!("cz-spike ready: open | hidden | close | quit");
+            println!("cz-spike ready: open | hidden | close | overlay | quit");
             Ok(())
         })
         .build(tauri::generate_context!())

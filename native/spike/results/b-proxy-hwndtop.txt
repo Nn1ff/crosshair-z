@@ -1,0 +1,6 @@
+hostile+HWND_TOP sample 1: screen 1920x1080, red pixels in center 64x64: 96 (expected 96)
+hostile+HWND_TOP sample 2: screen 1920x1080, red pixels in center 64x64: 0 (expected 96)
+hostile+HWND_TOP sample 3: screen 1920x1080, red pixels in center 64x64: 0 (expected 96)
+hostile+HWND_TOP sample 4: screen 1920x1080, red pixels in center 64x64: 96 (expected 96)
+hostile+HWND_TOP sample 5: screen 1920x1080, red pixels in center 64x64: 0 (expected 96)
+hostile+HWND_TOP sample 6: screen 1920x1080, red pixels in center 64x64: 0 (expected 96)
