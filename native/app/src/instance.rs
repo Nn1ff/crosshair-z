@@ -30,7 +30,24 @@ pub struct Hello {
 }
 
 fn user_suffix() -> String {
-    std::env::var("USERNAME").unwrap_or_default().chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+    let username = std::env::var("USERNAME").unwrap_or_default();
+    let isolated = std::env::var("CZ_USERDATA").ok();
+    let suffix = instance_suffix(&username, isolated.as_deref());
+    // Unit-test pipe listeners must never exchange handover messages with the real app.
+    if cfg!(test) {
+        format!("{suffix}.test.{}", std::process::id())
+    } else {
+        suffix
+    }
+}
+
+fn instance_suffix(username: &str, isolated_dir: Option<&str>) -> String {
+    use sha2::{Digest, Sha256};
+    let user: String = username.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    match isolated_dir.filter(|p| !p.is_empty()) {
+        Some(dir) => format!("{user}.isolated.{:x}", Sha256::digest(dir.as_bytes())),
+        None => user,
+    }
 }
 
 fn mutex_name() -> String {
@@ -175,6 +192,17 @@ pub fn own_hello() -> Hello {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    #[test]
+    fn isolated_data_directories_have_separate_instance_endpoints() {
+        let normal = instance_suffix("User", None);
+        let first = instance_suffix("User", Some("C:/isolated-a"));
+        let second = instance_suffix("User", Some("C:/isolated-b"));
+        assert_eq!(normal, "User");
+        assert_ne!(normal, first);
+        assert_ne!(first, second);
+        assert_eq!(first, instance_suffix("User", Some("C:/isolated-a")));
+    }
 
     #[test]
     fn hello_and_reply_over_pipe() {

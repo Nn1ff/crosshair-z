@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#111821"/><stop offset="1" stop-color="#1f3042"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#8ebade" stroke-opacity=".07"/></pattern>
+  </defs>
+  <rect width="1280" height="320" rx="20" fill="url(#bg)"/>
+  <rect width="1280" height="320" rx="20" fill="url(#grid)"/>
+  <g transform="translate(1070 150)" fill="none" stroke="#7cc4ff" stroke-width="8">
+    <circle r="78" stroke-opacity=".17" stroke-width="2"/>
+    <path d="M-55 0h34M21 0h34M0-55v34M0 21v34"/>
+    <circle r="3" fill="#7cc4ff" stroke="none"/>
+  </g>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="64" y="72" fill="#7cc4ff" font-size="16" letter-spacing="3">NATIVE WINDOWS OVERLAY · RUST 2.0</text>
+    <text x="60" y="151" fill="#f5f8fc" font-size="66" font-weight="700">Crosshair Z</text>
+    <text x="64" y="195" fill="#b5c5d6" font-size="24">Your crosshair. A lighter runtime.</text>
+    <text x="64" y="260" fill="#d7e4f1" font-size="18">~5 MB idle*  ·  ~3.85 MB portable EXE  ·  Designer &amp; pro presets</text>
+    <text x="64" y="290" fill="#8ca3b9" font-size="12">*Measured private working set with settings closed. Settings and rendering use WebView2.</text>
+  </g>
+</svg>

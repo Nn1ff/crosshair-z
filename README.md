@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.png" alt="Crosshair Z — lightweight crosshair overlay for Windows games" width="100%">
+  <img src="docs/images/banner.svg" alt="Crosshair Z 2.0 — native Rust overlay for Windows" width="100%">
 </p>
 
 <p align="center">
@@ -13,11 +13,10 @@
 
 ## Download
 
-**Native Rust beta:** [2.0.0-beta.1](https://github.com/Nn1ff/crosshair-z/releases/tag/v2.0.0-beta.1)
-uses a native Windows overlay and WebView2 for settings. The measured tray-only footprint is
-5.2 MB of private working set; the portable exe is 3.85 MB. See the
-[native build and testing guide](native/README.md) for requirements and validation limits.
-The stable download below remains the Electron version during beta testing.
+**Version 2.0 uses Rust with a native Windows overlay.** Microsoft Edge WebView2 Runtime
+is required for settings and generating crosshairs; it is already installed on many Windows PCs.
+The settings window releases its browser processes when closed. See the
+[native build and testing guide](native/README.md) for requirements and validation coverage.
 
 1. Get **`Crosshair-Z.exe`** from the [latest release](https://github.com/Nn1ff/crosshair-z/releases/latest).
 2. Run it. You don't need to install anything.
@@ -26,6 +25,8 @@ The stable download below remains the Electron version during beta testing.
 > Windows may warn because the exe is not signed: **More info → Run anyway**.
 
 ## Screenshots
+
+Captured from the native 2.0 settings window with isolated sample data.
 
 <table>
   <tr>
@@ -72,10 +73,10 @@ The stable download below remains the Electron version during beta testing.
 | | |
 |---|---|
 | **CPU** | ~0% while idle: the overlay only redraws when something changes |
-| **RAM** | ~100 MB in game: closing the settings window frees it, only the tiny overlay keeps running |
+| **RAM** | ~5 MB private working set measured with settings closed; opening settings also starts WebView2 processes |
 | **Privacy** | No account, telemetry or ads. One optional update check against GitHub (can be turned off) |
 | **Anti-cheat** | A plain transparent window above the game: no DLL injection, no hooks, no memory reading |
-| **Footprint** | Portable exe, one native dependency (`koffi`), no background services |
+| **Footprint** | ~3.85 MB portable Rust exe; WebView2 Runtime for settings/rendering; no background services |
 
 ## Updating
 
@@ -89,10 +90,28 @@ When a new version is out, Settings shows **Update**. Crosshair Z downloads the 
 
 **Can I use my Crosshair X crosshairs?** Yes. Saved and Workshop crosshairs from your local Crosshair X data show up under **Browse → Crosshair X**.
 
+**Do I need the Edge browser?** You need Microsoft Edge WebView2 Runtime for the settings
+and designer, but you do not need to open the Edge browser. Windows may list these child
+processes as WebView2 Manager. They are part of the app's memory usage while settings are open.
+
+**Will my old settings work?** Version 2.0 reads the same config as 1.8.x. After upgrading,
+re-select your monitor if you used a secondary display: the native display IDs differ.
+
 ## Development
 
-For the Rust beta, follow [native/README.md](native/README.md). The commands below build the
-Electron version, which stays available during the beta.
+Build the current native release from the repository root:
+
+```powershell
+npm ci
+powershell -NoProfile -ExecutionPolicy Bypass -File native/app/scripts/package.ps1
+node scripts/capture-native.js  # refresh README screenshots using the native app
+```
+
+The package script runs tests, builds the Rust runtime and checks the live overlay.
+The result is `release-native/Crosshair-Z.exe`. See [native/README.md](native/README.md)
+for toolchain requirements, isolated testing and migration details.
+
+The retained Electron 1.8.x implementation can still be built separately:
 
 ```bash
 npm install
@@ -103,17 +122,20 @@ npm run build:pack  # rebuild the bundled pro crosshair pack
 ```
 
 Dev aids:
-- `CZ_CAPTURE_DIR=<dir>` renders every page hidden, saves PNGs (the README screenshots come from this) and quits
-- `CZ_USERDATA=<dir>` runs with an isolated config
+- `node scripts/capture-native.js` refreshes the screenshots from the real native settings UI
+- `CZ_USERDATA=<dir>` uses isolated config and instance endpoints, skipping system integration
+- Legacy Electron only: `CZ_CAPTURE_DIR=<dir>` captures its pages and quits
 
 <details>
 <summary>Project layout</summary>
 
 ```
-src/main/       Electron main process: overlay window, tray, hotkeys, mouse polling, updates, autostart
+native/app/     Current Rust runtime: native overlay, config, input, updater, tray and settings IPC
+src/native/     WebView2 bridge and sprite rendering/transport
 src/renderer/   Settings UI, designer, overlay renderer
 src/shared/     Crosshair engine (schema, rendering, share codes), Crosshair X/Y import, preset pack
 test/           Unit tests
+src/main/       Retained Electron 1.8.x runtime
 ```
 </details>
 

@@ -1,4 +1,4 @@
-# Crosshair Z native beta
+# Crosshair Z native runtime
 
 The Rust runtime uses a native Win32 overlay. The existing JavaScript designer and
 crosshair renderer run in WebView2; the hidden sprite renderer is destroyed when idle.
@@ -6,13 +6,13 @@ Closing settings leaves the native overlay running without a browser process.
 
 ## Run
 
-Download `Crosshair-Z.exe` from the `v2.0.0-beta.1` prerelease and run it on Windows.
+Download `Crosshair-Z.exe` from the `v2.0.0` release and run it on Windows.
 Microsoft Edge WebView2 Runtime is required for settings and generating uncached crosshairs.
-This portable beta is unsigned and may trigger Windows SmartScreen.
+This portable app is unsigned and may trigger Windows SmartScreen.
 
 The native app uses the same `%APPDATA%\Crosshair Z\config.json` as version 1.8.x.
-Back up that file before testing. Starting the beta replaces a running legacy instance;
-the stable updater does not automatically offer prereleases.
+Back up that file before upgrading. Starting version 2.0 replaces a running legacy instance.
+The 1.8.x updater offers the stable 2.0 release with the same asset name.
 
 To test with separate data, set `CZ_USERDATA` to a new absolute directory before launching.
 This mode skips autostart changes, Start menu integration and legacy-process cleanup.
@@ -41,12 +41,12 @@ Golden tests compare composited sprites against Canvas references. The smoke tes
 rendering, disk-cache restart, renderer cleanup, the 15 MB RAM budget and single instance.
 One live GitHub network test is ignored by default; run it explicitly when needed.
 
-## Beta validation limits
+## Validation coverage and migration
 
 The automated checks cover one local Windows machine. Borderless games, all hotkeys and
 right-click modes, mixed DPI at 100/125/150%, and update handover from an installed 1.8.7
-remain manual acceptance checks before a stable 2.0 release.
+were not exhaustively tested in the release validation.
 Electron and native monitor identifiers differ: on first migration a saved monitor selection
 falls back to the primary display. Re-select the desired display in the native settings.
 Firing animation uses 33 pre-rendered levels, or 17 for larger sprite sets.
-Electron stays in the repository during the beta.
+Electron 1.8.x stays in the repository for reference and fallback builds.
