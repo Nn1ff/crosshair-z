@@ -5,3 +5,6 @@ dist/
 .DS_Store
 Thumbs.db
 release-*/
+
+native/**/target/
+.superpowers/

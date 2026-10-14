@@ -1,0 +1,10 @@
+# Throwaway spike workaround: this machine's VS Build Tools lack link.exe / cl.exe / x64 rc.exe
+# (CRT + SDK libs are present). Link with rustup's bundled rust-lld in lld-link mode instead.
+# Real fix: repair "MSVC v143 x64/x86 build tools" in the Visual Studio Installer.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+rustflags = ["-C", "linker-flavor=lld-link"]
+
+[env]
+LIB = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\ucrt\x64;C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64'
+RC = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\rc.exe'
