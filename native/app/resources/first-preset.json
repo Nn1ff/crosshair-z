@@ -1,0 +1,91 @@
+{
+  "name": "Aleksib (NAVI)",
+  "crosshair": {
+    "version": 3,
+    "layers": [
+      {
+        "name": "Layer 1",
+        "visible": true,
+        "kind": "shape",
+        "offsetX": 0,
+        "offsetY": 0,
+        "rotation": 0,
+        "scale": 1,
+        "lines": {
+          "enabled": true,
+          "shape": "rectangle",
+          "color": "#43e3e2",
+          "opacity": 1,
+          "length": 4,
+          "thickness": 1,
+          "offset": 3,
+          "blur": 0,
+          "top": true,
+          "bottom": true,
+          "left": true,
+          "right": true,
+          "count": 4,
+          "angle": 60,
+          "roundness": 0,
+          "capLength": 8,
+          "capThickness": 2
+        },
+        "dot": {
+          "enabled": false,
+          "shape": "circle",
+          "size": 2,
+          "thickness": 1,
+          "color": "#00ff00",
+          "useMainColor": false,
+          "opacity": 0,
+          "blur": 0
+        },
+        "outline": {
+          "enabled": false,
+          "thickness": 1,
+          "color": "#ff0000",
+          "opacity": 0,
+          "blur": 0
+        },
+        "image": {
+          "src": "",
+          "size": 64,
+          "opacity": 1,
+          "blur": 0
+        },
+        "form": {
+          "type": "square",
+          "width": 12,
+          "height": 12,
+          "corner": 0,
+          "color": "#00ff66",
+          "opacity": 1,
+          "blur": 0
+        },
+        "text": {
+          "value": "Z",
+          "size": 16,
+          "bold": true,
+          "spacing": 0,
+          "layout": "line",
+          "radius": 30,
+          "color": "#ffffff",
+          "opacity": 1,
+          "blur": 0
+        },
+        "draw": {
+          "src": "",
+          "color": "#00ff66",
+          "opacity": 1,
+          "blur": 0
+        },
+        "firing": {
+          "enabled": false,
+          "spread": 6,
+          "kick": 0,
+          "speed": 120
+        }
+      }
+    ]
+  }
+}
