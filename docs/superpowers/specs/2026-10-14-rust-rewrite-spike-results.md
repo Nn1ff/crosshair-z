@@ -50,7 +50,11 @@ All `msedgewebview2` processes are gone within 1 s of destroying the last webvie
 Note: with settings **open**, the WebView2 tree (~95–100 MB) is heavier than all of Electron 1.8.7
 (70 MB). Acceptable per spec (only in-game cost matters), but worth stating to users.
 
-## B — Layered overlay → **GO (proxy); real games PENDING-USER**
+## B — Layered overlay → **GO**
+
+User test 2026-10-14: spike overlay in a real game in borderless mode → "es funktioniert" (crosshair
+visible). Game name, alt-tab count and the DPI 125 % / secondary-monitor check were not reported →
+DPI check stays on the manual checklist before beta (spec §7).
 
 Overlay only, no webview ever opened, 30 s: **1.5 MB private WS, 0.00 % CPU**.
 
@@ -72,7 +76,7 @@ The hostile proxy is a worst case; ordinary borderless games are not topmost.
 
 Electron comparison against the proxy was discarded (user's crosshair disabled → nothing to see).
 
-**PENDING-USER** (needs a human): 2 real games in borderless mode, 10 min each with alt-tab;
+**Remaining manual items:** 2 real games in borderless mode, 10 min each with alt-tab;
 DPI 125 % / secondary monitor sharpness and centering. Run:
 ```
 native\spike\target\release\cz-spike.exe   → type: overlay
@@ -102,7 +106,7 @@ Cold (WebView2 profile dir `EBWebView` deleted): **415 ms**. Warm: 457 / 429 / 3
 
 1. Topmost reassert = `HWND_TOPMOST` + `HWND_TOP`, plus `EVENT_SYSTEM_FOREGROUND` hook (spec §4 update).
 2. Toolchain repair is a precondition of Plan 2 (admin, user action).
-3. Real-game test of B stays a manual acceptance item before beta (spec §7 checklist already lists it).
+3. Real-game test passed (user); DPI 125 % / secondary monitor stays a manual acceptance item before beta (spec §7 checklist).
 
 Expected in-game cost of 2.0 from these numbers: ~2–4 MB (overlay + host after settings were
 opened once) vs 70 MB today → **~95 % less RAM**; exe ~3–5 MB vs 68 MB.
