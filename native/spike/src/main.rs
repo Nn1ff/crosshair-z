@@ -19,13 +19,26 @@ fn ready() {
     }
 }
 
-fn open_webview(app: &AppHandle, visible: bool) {
+#[tauri::command]
+fn upload(request: tauri::ipc::Request<'_>) -> Result<usize, String> {
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => Ok(bytes.len()),
+        tauri::ipc::InvokeBody::Json(_) => Err("expected raw body, got JSON (payload was base64/JSON-encoded)".into()),
+    }
+}
+
+#[tauri::command]
+fn log_line(line: String) {
+    println!("[js] {line}");
+}
+
+fn open_webview(app: &AppHandle, page: &str, visible: bool) {
     if app.get_webview_window(LABEL).is_some() {
         println!("already open");
         return;
     }
     *OPENED_AT.lock().unwrap() = Some(Instant::now());
-    let result = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html".into()))
+    let result = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App(page.into()))
         .title("cz-spike")
         .visible(visible)
         .build();
@@ -50,8 +63,9 @@ fn stdin_loop(app: AppHandle) {
     for line in stdin.lock().lines() {
         let Ok(line) = line else { break };
         match line.trim() {
-            "open" => open_webview(&app, true),
-            "hidden" => open_webview(&app, false),
+            "open" => open_webview(&app, "index.html", true),
+            "hidden" => open_webview(&app, "index.html", false),
+            "bench" => open_webview(&app, "bench.html", false),
             "close" => close_webview(&app),
             "overlay" => overlay::spawn(),
             "quit" => app.exit(0),
@@ -63,11 +77,11 @@ fn stdin_loop(app: AppHandle) {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![ready])
+        .invoke_handler(tauri::generate_handler![ready, upload, log_line])
         .setup(|app| {
             let handle = app.handle().clone();
             std::thread::spawn(move || stdin_loop(handle));
-            println!("cz-spike ready: open | hidden | close | overlay | quit");
+            println!("cz-spike ready: open | hidden | bench | close | overlay | quit");
             Ok(())
         })
         .build(tauri::generate_context!())
