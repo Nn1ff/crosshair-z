@@ -1,0 +1,42 @@
+=== start, no webview @ 14:00:21
+1 processes, private working set 1,5 MB
+  cz-spike                     pid 4032         1,5 MB
+CPU over 5s: 0,00 % of total machine
+=== webview open @ 14:00:36
+7 processes, private working set 94,4 MB
+  msedgewebview2#2             pid 4348        40,7 MB
+  msedgewebview2               pid 19604       28,2 MB
+  msedgewebview2#5             pid 5612        11,0 MB
+  msedgewebview2#3             pid 2628         6,7 MB
+  cz-spike                     pid 4032         3,7 MB
+  msedgewebview2#4             pid 6328         2,6 MB
+  msedgewebview2#1             pid 2812         1,5 MB
+CPU over 5s: 0,02 % of total machine
+=== close +1s @ 14:00:44
+1 processes, private working set 3,8 MB
+  cz-spike                     pid 4032         3,8 MB
+CPU over 1s: 0,00 % of total machine
+=== close +10s @ 14:00:53
+1 processes, private working set 3,8 MB
+  cz-spike                     pid 4032         3,8 MB
+CPU over 3s: 0,00 % of total machine
+=== close +60s @ 14:01:45
+1 processes, private working set 3,7 MB
+  cz-spike                     pid 4032         3,7 MB
+CPU over 3s: 0,00 % of total machine
+=== after 5 cycles +10s @ 14:02:40
+1 processes, private working set 4,0 MB
+  cz-spike                     pid 4032         4,0 MB
+CPU over 3s: 0,00 % of total machine
+process alive check: reopened
+=== reopen after cycles @ 14:02:50
+7 processes, private working set 102,0 MB
+  msedgewebview2#2             pid 10696       47,7 MB
+  msedgewebview2               pid 16540       28,8 MB
+  msedgewebview2#5             pid 17172       11,3 MB
+  msedgewebview2#3             pid 9700         6,0 MB
+  cz-spike                     pid 4032         4,1 MB
+  msedgewebview2#4             pid 10620        2,6 MB
+  msedgewebview2#1             pid 21032        1,5 MB
+CPU over 2s: 0,00 % of total machine
+exit 0
