@@ -41,7 +41,8 @@
   },
   "devDependencies": {
     "electron": "^33.4.11",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "playwright-core": "^1.48.2"
   },
   "dependencies": {
     "koffi": "^2.16.3"

@@ -1,0 +1,272 @@
+[
+ {
+  "id": "000",
+  "name": "preset Classic/Classic Green",
+  "size": 32
+ },
+ {
+  "id": "001",
+  "name": "preset Classic/Classic Cyan",
+  "size": 32
+ },
+ {
+  "id": "002",
+  "name": "preset Classic/Classic Yellow",
+  "size": 32
+ },
+ {
+  "id": "003",
+  "name": "preset Classic/Classic Magenta",
+  "size": 32
+ },
+ {
+  "id": "004",
+  "name": "preset Classic/Plus Dot",
+  "size": 32
+ },
+ {
+  "id": "005",
+  "name": "preset Classic/Wide Gap",
+  "size": 42
+ },
+ {
+  "id": "006",
+  "name": "preset Classic/Thick Bold",
+  "size": 40
+ },
+ {
+  "id": "007",
+  "name": "preset Classic/No Outline",
+  "size": 32
+ },
+ {
+  "id": "008",
+  "name": "preset Dot/Tiny Dot",
+  "size": 32
+ },
+ {
+  "id": "009",
+  "name": "preset Dot/Pixel Dot",
+  "size": 32
+ },
+ {
+  "id": "010",
+  "name": "preset Dot/Round Dot",
+  "size": 32
+ },
+ {
+  "id": "011",
+  "name": "preset Dot/Big Square",
+  "size": 32
+ },
+ {
+  "id": "012",
+  "name": "preset Dot/Ghost Dot",
+  "size": 32
+ },
+ {
+  "id": "013",
+  "name": "preset Circle/Circle Dot",
+  "size": 42
+ },
+ {
+  "id": "014",
+  "name": "preset Circle/Ring",
+  "size": 34
+ },
+ {
+  "id": "015",
+  "name": "preset Circle/Shotgun Ring",
+  "size": 74
+ },
+ {
+  "id": "016",
+  "name": "preset Circle/Scoped Cross",
+  "size": 48
+ },
+ {
+  "id": "017",
+  "name": "preset T-Shape/T-Shape",
+  "size": 36
+ },
+ {
+  "id": "018",
+  "name": "preset T-Shape/T Dot",
+  "size": 32
+ },
+ {
+  "id": "019",
+  "name": "preset T-Shape/Chevron",
+  "size": 32
+ },
+ {
+  "id": "020",
+  "name": "preset T-Shape/Bottom Only",
+  "size": 38
+ },
+ {
+  "id": "021",
+  "name": "preset T-Shape/Triangle T",
+  "size": 40
+ },
+ {
+  "id": "022",
+  "name": "preset Sniper/Sniper Thin",
+  "size": 42
+ },
+ {
+  "id": "023",
+  "name": "preset Sniper/Long Lines",
+  "size": 108
+ },
+ {
+  "id": "024",
+  "name": "preset Sniper/Mil-Dot",
+  "size": 80
+ },
+ {
+  "id": "025",
+  "name": "preset Sniper/Fine Point",
+  "size": 32
+ },
+ {
+  "id": "026",
+  "name": "preset Dynamic/Spread Cross",
+  "size": 48
+ },
+ {
+  "id": "027",
+  "name": "preset Dynamic/Spread Ring",
+  "size": 50
+ },
+ {
+  "id": "028",
+  "name": "preset Dynamic/Recoil Kick",
+  "size": 48
+ },
+ {
+  "id": "029",
+  "name": "preset Dynamic/Static Dot + Spread",
+  "size": 58
+ },
+ {
+  "id": "030",
+  "name": "preset Layered/Bullet Drop",
+  "size": 98
+ },
+ {
+  "id": "031",
+  "name": "preset Layered/Dot in Ring X",
+  "size": 44
+ },
+ {
+  "id": "032",
+  "name": "preset Layered/Double Cross",
+  "size": 48
+ },
+ {
+  "id": "033",
+  "name": "preset Stylized/Big X",
+  "size": 44
+ },
+ {
+  "id": "034",
+  "name": "preset Stylized/Diamond X",
+  "size": 32
+ },
+ {
+  "id": "035",
+  "name": "preset Stylized/Tactical",
+  "size": 58
+ },
+ {
+  "id": "036",
+  "name": "preset Stylized/Blocky",
+  "size": 32
+ },
+ {
+  "id": "037",
+  "name": "preset Stylized/Arrows",
+  "size": 40
+ },
+ {
+  "id": "038",
+  "name": "pack Aleksib (NAVI)",
+  "size": 32
+ },
+ {
+  "id": "039",
+  "name": "pack apEX (Vitality)",
+  "size": 32
+ },
+ {
+  "id": "040",
+  "name": "pack arT (FURIA)",
+  "size": 32
+ },
+ {
+  "id": "041",
+  "name": "pack Ax1Le",
+  "size": 32
+ },
+ {
+  "id": "042",
+  "name": "pack b1t (NAVI)",
+  "size": 32
+ },
+ {
+  "id": "043",
+  "name": "pack blameF",
+  "size": 32
+ },
+ {
+  "id": "044",
+  "name": "pack broky (FaZe)",
+  "size": 32
+ },
+ {
+  "id": "045",
+  "name": "pack cadiaN (Team Liquid)",
+  "size": 32
+ },
+ {
+  "id": "046",
+  "name": "pack chopper (Team Spirit)",
+  "size": 32
+ },
+ {
+  "id": "047",
+  "name": "pack Coldzera (Red Candids)",
+  "size": 32
+ },
+ {
+  "id": "048",
+  "name": "pack degster (Heroic)",
+  "size": 32
+ },
+ {
+  "id": "049",
+  "name": "pack deko (Aurora Gaming)",
+  "size": 32
+ },
+ {
+  "id": "050",
+  "name": "synthetic text",
+  "size": 46
+ },
+ {
+  "id": "051",
+  "name": "synthetic form circle",
+  "size": 32
+ },
+ {
+  "id": "052",
+  "name": "synthetic blur firing",
+  "size": 60
+ },
+ {
+  "id": "053",
+  "name": "synthetic image",
+  "size": 100
+ }
+]

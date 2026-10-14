@@ -952,7 +952,8 @@
     const img = getImage(layer.image.src);
     if (!img) return;
     const size = layer.image.size * s;
-    const ratio = img.naturalWidth / img.naturalHeight;
+    // primed images are OffscreenCanvas (width/height), decoded ones are Image (naturalWidth/Height)
+    const ratio = (img.naturalWidth || img.width) / (img.naturalHeight || img.height);
     const w = ratio >= 1 ? size : size * ratio;
     const h = ratio >= 1 ? size / ratio : size;
     ctx.save();

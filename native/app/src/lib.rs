@@ -5,3 +5,4 @@ pub mod paths;
 pub mod config;
 pub mod state;
 pub mod sprites;
+pub mod overlay;
