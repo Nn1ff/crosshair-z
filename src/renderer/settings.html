@@ -69,7 +69,7 @@
     </div>
     <span class="tb-sep"></span>
     <label class="power" title="Show or hide the crosshair overlay">
-      <input type="checkbox" id="enabledToggle">
+      <input type="checkbox" id="enabledToggle" aria-label="Show crosshair overlay">
       <span class="power-btn"><span class="power-thumb"><svg><use href="#i-eye"/></svg></span></span>
     </label>
   </div>
@@ -93,9 +93,17 @@
   <main class="content">
     <section class="page hidden" data-page="discover">
   <div class="discover-wrap">
-    <div class="strip-head"><h2 class="featured-title">✦ YOUR CROSSHAIRS</h2><button class="text-action" data-goto="saved">See all</button></div>
+    <div class="discover-head">
+      <div><h1>Crosshairs</h1><p class="sub">Pick a crosshair. Make it yours in the designer.</p></div>
+      <div class="discover-actions">
+        <button class="btn ghost" data-goto="library"><svg><use href="#i-search"/></svg>Browse all</button>
+        <button class="btn ghost" data-goto="designer"><svg><use href="#i-pen"/></svg>Open designer</button>
+      </div>
+    </div>
+    <div class="strip-head"><h2 class="featured-title">Your crosshairs</h2><button class="text-action" data-goto="saved">See all</button></div>
     <ul id="savedStrip" class="saved-strip"></ul>
-    <h2 class="featured-title">✦ DISCOVER CROSSHAIRS</h2><ul id="discoverCards" class="card-grid"></ul>
+    <div class="strip-head"><h2 class="featured-title">Discover crosshairs</h2><button class="text-action" data-goto="discover"><svg><use href="#i-refresh"/></svg>Refresh</button></div>
+    <ul id="discoverCards" class="card-grid"></ul>
   </div>
 </section>
 <!-- Library -->

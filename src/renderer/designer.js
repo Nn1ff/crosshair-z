@@ -29,7 +29,7 @@
   };
   /** Per-background canvas colors. 'game' paints a simple scene so contrast can be judged. */
   const BACKGROUNDS = {
-    dark: { fill: '#161920', grid: 'rgba(255,255,255,0.045)', gridMajor: 'rgba(255,255,255,0.09)', guide: 'rgba(255,255,255,0.22)' },
+    dark: { fill: '#191919', grid: 'rgba(255,255,255,0.035)', gridMajor: 'rgba(255,255,255,0.07)', guide: 'rgba(255,255,255,0.18)' },
     light: { fill: '#dfe4ea', grid: 'rgba(0,0,0,0.06)', gridMajor: 'rgba(0,0,0,0.12)', guide: 'rgba(0,0,0,0.3)' },
     game: { fill: null, grid: 'rgba(255,255,255,0.05)', gridMajor: 'rgba(255,255,255,0.1)', guide: 'rgba(255,255,255,0.25)' },
   };

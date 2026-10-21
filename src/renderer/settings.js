@@ -34,12 +34,13 @@
 
   /** Rail groups → top tabs. */
   const GROUPS = {
-    crosshairs: [['discover', 'Discover'], ['library', 'Browse'], ['saved', 'Saved'], ['import', 'Import'], ['share', 'Share']],
+    crosshairs: [['discover', 'Discover'], ['library', 'Browse'], ['saved', 'Saved'], ['share', 'Share'], ['import', 'Import']],
     designer: [['designer', 'Designer']],
     keys: [['hotkeys', 'Hotkeys'], ['toggle', 'Toggle']],
     display: [['position', 'Position and size']],
     app: [['settings', 'Settings']],
   };
+  const TAB_ICONS = { discover: 'scope', library: 'search', saved: 'bookmark', share: 'share', import: 'import' };
   const CX_COLLECTION = 'Crosshair X';
   const CATEGORY_ICONS = {
     All: 'grid', Classic: 'shape', Dot: 'dot', Circle: 'ring', 'T-Shape': 'tshape', Sniper: 'scope',
@@ -100,6 +101,13 @@
     drawCardThumb(canvas, ch);
     const li = el('li', { class: 'card' + (active ? ' active' : ''), title: name }, el('div', { class: 'slide' }, canvas),
       el('div', { class: 'meta' }, el('span', { class: 'name' }, name), tag ? el('span', { class: 'tag' }, tag) : null), extra);
+    li.tabIndex = 0;
+    li.setAttribute('aria-label', `${name}${active ? ', equipped' : ''}. Press Enter to equip.`);
+    li.addEventListener('keydown', (e) => {
+      if (e.target !== li || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      li.click();
+    });
     if (opts.onMark) {
       const mark = el('button', { class: 'mark' + (opts.marked ? ' on' : ''), title: opts.marked ? 'Remove from Saved' : 'Add to Saved' }, icon(opts.marked ? 'bookmarked' : 'bookmark'));
       mark.addEventListener('click', (e) => {
@@ -688,11 +696,32 @@
     }
     const group = groupOf(page);
     ui.lastPage[group] = page;
-    document.querySelectorAll('.rail-btn').forEach((b) => b.classList.toggle('active', b.dataset.group === group));
+    document.querySelectorAll('.rail-btn').forEach((b) => {
+      const active = b.dataset.group === group;
+      b.classList.toggle('active', active);
+      if (active) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
     // a section with a single page needs no tab strip (its page has its own header/toolbar)
     document.querySelector('.shell').classList.toggle('single', GROUPS[group].length === 1);
-    $('tabs').replaceChildren(...GROUPS[group].map(([p, label]) =>
-      el('button', { class: 'tab' + (p === page ? ' active' : ''), role: 'tab', onclick: () => showPage(p) }, label)));
+    $('tabs').replaceChildren(...GROUPS[group].map(([p, label]) => {
+      const utility = p === 'share' || p === 'import';
+      const button = el('button', {
+        class: 'tab' + (utility ? ' utility' : '') + (p === 'share' ? ' utility-start' : '') + (p === page ? ' active' : ''),
+        role: 'tab', 'aria-selected': String(p === page), tabindex: p === page ? 0 : -1, onclick: () => showPage(p),
+      }, TAB_ICONS[p] ? icon(TAB_ICONS[p]) : null, label);
+      button.addEventListener('keydown', (e) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+        e.preventDefault();
+        const pages = GROUPS[group];
+        const index = pages.findIndex(([id]) => id === p);
+        const next = e.key === 'Home' ? 0 : e.key === 'End' ? pages.length - 1
+          : (index + (e.key === 'ArrowRight' ? 1 : -1) + pages.length) % pages.length;
+        showPage(pages[next][0]);
+        $('tabs').children[next].focus();
+      });
+      return button;
+    }));
     document.querySelectorAll('.page').forEach((p) => p.classList.toggle('hidden', p.dataset.page !== page));
     if (page === 'position') loadMonitors();
     if (page === 'library') $('librarySearch').focus({ preventScroll: true });
