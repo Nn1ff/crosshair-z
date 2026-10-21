@@ -1,0 +1,72 @@
+{
+  "tab-1": {
+    "source": "tabchange-001-BLQ31O2Z.wav",
+    "sourceSha256": "fea42ae3a0445f736e5de1416d6aaab8e94f4f31d930ca2f89ec128c16bf17ed",
+    "speed": 1.045,
+    "gain": 6.2242,
+    "seconds": 0.336
+  },
+  "tab-2": {
+    "source": "tabchange-002-BPOzGBJb.wav",
+    "sourceSha256": "e34d7709df7f4ffd59b1412bd51186528e62b5f935cf5925074bfb93b609a166",
+    "speed": 1.045,
+    "gain": 5.4054,
+    "seconds": 0.332
+  },
+  "tab-3": {
+    "source": "tabchange-003-vUrfFQi5.wav",
+    "sourceSha256": "51142d36f81369fa9f1124aa798d83b84a91920bbdf1b8812d30eee8628f62ad",
+    "speed": 1.045,
+    "gain": 6.2311,
+    "seconds": 0.33
+  },
+  "tab-4": {
+    "source": "tabchange-004-CeEjKz7s.wav",
+    "sourceSha256": "b817aa3b8e29d1f0e39d054813ac583f1f0db8473a5bfd7cb54f612caf9a33d2",
+    "speed": 1.045,
+    "gain": 6.2413,
+    "seconds": 0.34
+  },
+  "click-1": {
+    "source": "genericselect-001-CRTZSIUi.wav",
+    "sourceSha256": "a821382367a815d1d40d4bad43a4f9ad5e6b44ab26afba7b7b75145f5049e27c",
+    "speed": 1.035,
+    "gain": 4.55,
+    "seconds": 0.157
+  },
+  "click-2": {
+    "source": "genericselect-002-VH9L8PS2.wav",
+    "sourceSha256": "fe075f12a246c4d12931a9e3a7745e12ae08077fc95d3b6ae7165d66edc8dd83",
+    "speed": 1.035,
+    "gain": 4.547,
+    "seconds": 0.157
+  },
+  "toggle-on": {
+    "source": "toggle-on-DPwrpdWJ.wav",
+    "sourceSha256": "d3feb997450b7ae61833a6d9f854ef18612a092389f1857c90a2c2c4495fec2a",
+    "speed": 1.055,
+    "gain": 2.4382,
+    "seconds": 0.247
+  },
+  "toggle-off": {
+    "source": "toggle-off-DxrfGJBS.wav",
+    "sourceSha256": "9c097669db2cc9a48a542fa11bd0977b1301501aea30ab4ca4df3075162cfdec",
+    "speed": 1.055,
+    "gain": 2.2294,
+    "seconds": 0.24
+  },
+  "adjust-high": {
+    "source": "slider-hi-DzmD-ntX.wav",
+    "sourceSha256": "474572174e639e983056dd975af6b36e9172144ba33afe6ed10a695a53749e0e",
+    "speed": 1.06,
+    "gain": 0.8639,
+    "seconds": 0.031
+  },
+  "adjust-low": {
+    "source": "slider-low-CTqCpSVx.wav",
+    "sourceSha256": "8fc7352fbbb6e30d8853cf3e64e1afe5f8809b3e5d458c34f50d6fdcfd69734e",
+    "speed": 1.06,
+    "gain": 0.8323,
+    "seconds": 0.042
+  }
+}

@@ -286,7 +286,10 @@
   async function activate(id) {
     flushPush();
     const cfg = await call('profile:activate', id);
-    if (cfg) applyConfig(cfg, true);
+    if (cfg) {
+      applyConfig(cfg, true);
+      CZSfx.play('click');
+    }
   }
 
   /** Create + equip. dedupe=true reuses an identical saved crosshair (library clicks). */
@@ -295,6 +298,7 @@
     const res = await call('profile:create', { name, crosshair, dedupe });
     if (res) {
       applyConfig(res.config, true);
+      CZSfx.play('click');
       toast(`Equipped "${name}"`);
     }
   }
@@ -315,7 +319,8 @@
 
   // ---------- designer bridge ----------
 
-  function onDesignerChange(draft) {
+  function onDesignerChange(draft, structural) {
+    CZSfx.play(structural ? 'click' : 'high');
     ui.draft = draft;
     ui.designer.setStatus('saving');
     schedulePush();
@@ -729,6 +734,26 @@
   }
 
   function wire() {
+    const syncSounds = () => {
+      const prefs = CZSfx.getPreferences();
+      $('uiSoundsEnabled').checked = prefs.enabled;
+      $('uiSoundVolume').value = Math.round(prefs.volume * 100);
+      $('uiSoundVolume').style.setProperty('--p', `${Math.round(prefs.volume * 100)}%`);
+      $('uiSoundLevel').textContent = `${Math.round(prefs.volume * 100)}%`;
+      $('soundPreview').disabled = !prefs.enabled || !prefs.volume;
+    };
+    syncSounds();
+    $('uiSoundsEnabled').addEventListener('change', e => {
+      CZSfx.setPreferences({ enabled: e.target.checked });
+      syncSounds();
+      if (e.target.checked) CZSfx.play('on');
+    });
+    $('uiSoundVolume').addEventListener('input', e => {
+      CZSfx.setPreferences({ volume: Number(e.target.value) / 100 });
+      syncSounds();
+    });
+    $('uiSoundVolume').addEventListener('change', () => CZSfx.play('click'));
+    $('soundPreview').addEventListener('click', () => CZSfx.play('tab'));
     makeDragScroll($('savedStrip'));
     document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.goto)));
     document.querySelectorAll('.rail-btn').forEach((b) => b.addEventListener('click', () => {
