@@ -18,7 +18,7 @@ const EXT: &str = "bin";
 /// Cache key: sha256 over format version, scale and the crosshair JSON (key order preserved).
 pub fn cache_key(crosshair: &Value, scale: f64) -> String {
     let mut h = Sha256::new();
-    h.update(format!("CZSP{FORMAT_VERSION}\n{scale}\n").as_bytes());
+    h.update(format!("CZSP{FORMAT_VERSION}-render2\n{scale}\n").as_bytes());
     h.update(serde_json::to_vec(crosshair).unwrap_or_default());
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }

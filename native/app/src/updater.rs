@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use windows::core::{HSTRING, PCWSTR};
 use windows::Win32::Networking::WinHttp::{
     WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse,
@@ -34,7 +35,26 @@ pub struct Release {
     pub version: String,
     pub url: String,
     pub size: u64,
+    pub sha256: String,
     pub page: Option<String>,
+}
+
+fn trusted_asset_url(url: &str, version: &str) -> bool {
+    [format!("v{version}"), version.to_string()].iter().any(|tag| {
+        url == format!("https://github.com/Nn1ff/crosshair-z/releases/download/{tag}/{ASSET_NAME}")
+    })
+}
+
+fn valid_sha256(hash: &str) -> bool {
+    hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Preserve actionable antivirus diagnostics instead of suggesting an update retry or bypass.
+pub fn file_error(err: &std::io::Error) -> String {
+    if matches!(err.raw_os_error(), Some(225 | 226)) {
+        return "Windows antivirus blocked or removed the update. Open Windows Security > Protection history for the detection name. Keep protection enabled and report the file to Microsoft for review.".into();
+    }
+    err.to_string()
 }
 
 /// `v1.2.3` / `1.2` → `1.2.3` / `1.2`; at most 4 numeric parts.
@@ -79,12 +99,16 @@ pub fn parse_release(json: &Value) -> Option<Release> {
     let version = version_of(json.get("tag_name")?.as_str()?)?;
     let asset = json.get("assets")?.as_array()?.iter().find(|a| a.get("name").and_then(Value::as_str) == Some(ASSET_NAME))?;
     let url = asset.get("browser_download_url")?.as_str()?.to_string();
-    if !url.starts_with(DOWNLOAD_HOST_PREFIX) {
+    if !trusted_asset_url(&url, &version) {
         return None;
     }
     let size = asset.get("size")?.as_u64().filter(|s| *s > 0 && *s <= MAX_ASSET_BYTES)?;
+    let sha256 = asset.get("digest")?.as_str()?.strip_prefix("sha256:")?;
+    if !valid_sha256(sha256) {
+        return None;
+    }
     let page = json.get("html_url").and_then(Value::as_str).filter(|p| p.starts_with(DOWNLOAD_HOST_PREFIX)).map(String::from);
-    Some(Release { version, url, size, page })
+    Some(Release { version, url, size, sha256: sha256.to_ascii_lowercase(), page })
 }
 
 #[derive(Debug)]
@@ -229,9 +253,10 @@ pub fn versioned_exe_name(version: &str) -> String {
     format!("Crosshair Z {version}.exe")
 }
 
-/// Download next to the running exe as "Crosshair Z <version>.exe" (via `.part`, size checked).
+/// Download next to the running exe via `.part`; verify release origin, size and SHA-256 before installation.
 pub fn download(release: &Release, dir: &Path) -> Result<PathBuf, String> {
-    if version_of(&release.version).is_none() || release.version.split('.').count() != 3 {
+    if version_of(&release.version).as_deref() != Some(release.version.as_str()) || release.version.split('.').count() != 3 ||
+        !trusted_asset_url(&release.url, &release.version) || !valid_sha256(&release.sha256) || release.size == 0 || release.size > MAX_ASSET_BYTES {
         return Err("invalid release".into());
     }
     let dest = dir.join(versioned_exe_name(&release.version));
@@ -239,22 +264,27 @@ pub fn download(release: &Release, dir: &Path) -> Result<PathBuf, String> {
     let started = Instant::now();
     logger::info("update download start", json!({"version": release.version, "dest": dest.display().to_string()}));
     let result = (|| -> Result<(), String> {
-        let mut file = fs::File::create(&part).map_err(|e| e.to_string())?;
+        let mut file = fs::File::create(&part).map_err(|e| file_error(&e))?;
         let mut written: u64 = 0;
+        let mut hash = Sha256::new();
         http_get(&release.url, DOWNLOAD_TIMEOUT, None, &mut |chunk| {
             written += chunk.len() as u64;
             if written > MAX_ASSET_BYTES {
                 return Err("download larger than allowed".into());
             }
-            file.write_all(chunk).map_err(|e| e.to_string())
+            file.write_all(chunk).map_err(|e| file_error(&e))?;
+            hash.update(chunk);
+            Ok(())
         })
         .map_err(|e| e.to_string())?;
-        file.flush().map_err(|e| e.to_string())?;
+        file.flush().map_err(|e| file_error(&e))?;
         drop(file);
         if written != release.size {
             return Err(format!("size mismatch: got {written}, expected {}", release.size));
         }
-        fs::rename(&part, &dest).map_err(|e| e.to_string())
+        let actual: [u8; 32] = hash.finalize().into();
+        verify_sha256(&actual, &release.sha256)?;
+        fs::rename(&part, &dest).map_err(|e| file_error(&e))
     })();
     match result {
         Ok(()) => {
@@ -267,6 +297,14 @@ pub fn download(release: &Release, dir: &Path) -> Result<PathBuf, String> {
             Err(err)
         }
     }
+}
+
+fn verify_sha256(actual: &[u8], expected: &str) -> Result<(), String> {
+    let hex: String = actual.iter().map(|b| format!("{b:02x}")).collect();
+    if !valid_sha256(expected) || !hex.eq_ignore_ascii_case(expected) {
+        return Err("SHA-256 mismatch: the update does not match the published release and was not installed.".into());
+    }
+    Ok(())
 }
 
 /// "Crosshair Z 1.2.3.exe" or its ".part" → (version, is_part).
@@ -317,7 +355,7 @@ mod tests {
             "html_url": "https://github.com/Nn1ff/crosshair-z/releases/tag/v2.1.0",
             "assets": [
                 {"name": "other.zip", "browser_download_url": "https://github.com/x/other.zip", "size": 5},
-                {"name": "Crosshair-Z.exe", "browser_download_url": "https://github.com/Nn1ff/crosshair-z/releases/download/v2.1.0/Crosshair-Z.exe", "size": 4000000}
+                {"name": "Crosshair-Z.exe", "browser_download_url": "https://github.com/Nn1ff/crosshair-z/releases/download/v2.1.0/Crosshair-Z.exe", "size": 4000000, "digest": format!("sha256:{}", "a".repeat(64))}
             ]
         })
     }
@@ -365,6 +403,51 @@ mod tests {
         assert!(HttpError { status: None, message: "x".into() }.transient());
         assert!(HttpError { status: Some(503), message: "x".into() }.transient());
         assert!(!HttpError { status: Some(403), message: "x".into() }.transient());
+    }
+
+    #[test]
+    fn requires_correct_repository_version_and_digest() {
+        let mut j = rel_json();
+        j["assets"][1]["browser_download_url"] = json!("https://github.com/other/repo/releases/download/v2.1.0/Crosshair-Z.exe");
+        assert!(parse_release(&j).is_none());
+        let mut j = rel_json();
+        j["assets"][1]["browser_download_url"] = json!("https://github.com/Nn1ff/crosshair-z/releases/download/v1.0.0/Crosshair-Z.exe");
+        assert!(parse_release(&j).is_none());
+        for digest in [Value::Null, json!("sha256:abc"), json!(format!("sha256:{}", "g".repeat(64))), json!(format!("sha1:{}", "a".repeat(64)))] {
+            let mut j = rel_json();
+            j["assets"][1]["digest"] = digest;
+            assert!(parse_release(&j).is_none());
+        }
+    }
+
+    #[test]
+    fn validates_download_hash_even_when_size_is_unchanged() {
+        let actual: [u8; 32] = Sha256::digest(b"original").into();
+        let expected: String = actual.iter().map(|b| format!("{b:02x}")).collect();
+        assert!(verify_sha256(&actual, &expected.to_uppercase()).is_ok());
+        let tampered: [u8; 32] = Sha256::digest(b"modified").into();
+        assert!(verify_sha256(&tampered, &expected).is_err());
+        assert!(verify_sha256(&actual, "").is_err());
+    }
+
+    #[test]
+    fn download_revalidates_metadata_before_creating_files() {
+        let mut r = parse_release(&rel_json()).unwrap();
+        r.url = "https://github.com/other/repo/app.exe".into();
+        let dir = std::env::temp_dir().join(format!("cz-rejected-update-{}", std::process::id()));
+        assert_eq!(download(&r, &dir).unwrap_err(), "invalid release");
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn antivirus_errors_explain_block_without_suggesting_exclusions() {
+        for code in [225, 226] {
+            let text = file_error(&std::io::Error::from_raw_os_error(code));
+            assert!(text.contains("Protection history"));
+            assert!(text.contains("Keep protection enabled"));
+        }
+        let ordinary = std::io::Error::from_raw_os_error(5);
+        assert_eq!(file_error(&ordinary), ordinary.to_string());
     }
 
     #[test]

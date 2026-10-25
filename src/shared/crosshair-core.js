@@ -46,6 +46,7 @@
     name: { t: 's', max: 24 },
     visible: { t: 'b' },
     kind: { t: 'e', values: LAYER_KINDS }, // shape = crosshair (lines/dot), form = geometric shape
+    renderer: { t: 'e', values: ['canvas', 'svg'] },
     offsetX: { t: 'n', min: -300, max: 300, int: true },
     offsetY: { t: 'n', min: -300, max: 300, int: true },
     rotation: { t: 'n', min: -180, max: 180, int: true }, // lines/form/text/image; the dot never rotates
@@ -55,7 +56,7 @@
       shape: { t: 'e', values: LINE_SHAPES },
       color: { t: 'c' },
       opacity: OPACITY,
-      length: { t: 'n', min: 0, max: 100, int: true },
+      length: { t: 'n', min: 0, max: 100 },
       thickness: { t: 'n', min: 1, max: 40, int: true },
       offset: { t: 'n', min: -40, max: 200, int: true }, // total empty pixels between opposite arms
       blur: BLUR,
@@ -81,7 +82,7 @@
     },
     outline: {
       enabled: { t: 'b' },
-      thickness: { t: 'n', min: 1, max: 6, int: true },
+      thickness: { t: 'n', min: 1, max: 40 },
       color: { t: 'c' },
       opacity: OPACITY,
       blur: BLUR,
@@ -131,6 +132,7 @@
     name: 'Layer 1',
     visible: true,
     kind: 'shape',
+    renderer: 'canvas',
     offsetX: 0,
     offsetY: 0,
     rotation: 0,
@@ -619,6 +621,12 @@
   function firedExtent(layer, g, lv) {
     const l = firedLayer(layer, lv);
     const s = l.scale * g;
+    if (l.renderer === 'svg') {
+      const body = Math.max(l.lines.enabled ? l.lines.length + Math.abs(l.lines.offset) / 2 + l.lines.thickness + Math.abs(l.lines.spread || 0) + 1 : 0,
+        l.dot.enabled ? l.dot.size + l.dot.thickness : 0);
+      return (body + (l.outline.enabled ? l.outline.thickness : 0) +
+        4 * Math.max(l.lines.blur, l.dot.blur, l.outline.enabled ? l.outline.blur : 0) + 2) * s + Math.hypot(l.offsetX, l.offsetY) * g;
+    }
     const blurOf = (b) => b * BLUR_REACH;
     let r = 0;
     const o = l.outline.enabled ? l.outline.thickness : 0;
@@ -690,13 +698,100 @@
     if (typeof OffscreenCanvas !== 'undefined' && img instanceof OffscreenCanvas) return img;
     if (!img) {
       img = new Image();
-      img.onload = () => imageListener && imageListener();
+      img.onload = () => {
+        if (src.startsWith('data:image/svg+xml;')) rasterizeSvg(src, img);
+        if (imageListener) imageListener();
+      };
       img.onerror = () => console.warn('crosshair image failed to decode');
       img.src = src;
       imageCache.set(src, img);
       if (imageCache.size > MAX_IMAGE_CACHE) imageCache.delete(imageCache.keys().next().value);
     }
-    return img.complete && img.naturalWidth ? img : null;
+    if (!img.complete || !img.naturalWidth) return null;
+    return src.startsWith('data:image/svg+xml;') ? rasterizeSvg(src, img) : img;
+  }
+
+  /** Rasterize generated SVGs once in the same canvas mode in every WebView.
+   * Otherwise GPU-backed previews and CPU sprite export use different filter kernels.
+   */
+  function rasterizeSvg(src, img) {
+    const cached = imageCache.get(src);
+    if (cached instanceof OffscreenCanvas) return cached;
+    const canvas = new OffscreenCanvas(img.naturalWidth, img.naturalHeight);
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    imageCache.set(src, canvas);
+    return canvas;
+  }
+
+  /** SVG model rendering follows X/Y's local geometry, per-arm filters and layer transform.
+   * Keep the SVG vector until the requested output resolution (designer zoom or overlay pixels).
+   * Generated only from sanitized numeric/color fields; no imported markup is executed.
+   */
+  function modelSvg(l, s, resolution = 1) {
+    const reach = layerExtent({ ...l, offsetX: 0, offsetY: 0, scale: s }, 1);
+    const size = Math.max(2, Math.ceil(reach) * 2);
+    const rect = (x, y, w, h) => `M${x},${y}h${w}v${h}h${-w}Z`;
+    const filters = ['lines', 'dot', 'outline'].map((p) => `<filter id="${p}" x="-250%" y="-250%" width="500%" height="500%"><feGaussianBlur stdDeviation="${l[p].blur}"/></filter>`).join('');
+    const path = (d, p) => `<path d="${d}" fill="${p.color}" fill-opacity="${p.opacity}"/>`;
+    const group = (body, filter) => `<g filter="url(#${filter})">${body}</g>`;
+    let lines = '', outlines = '', dot = '', dotOutline = '';
+    const L = l.lines, D = l.dot, O = l.outline;
+    if (L.enabled && L.length > 0 && L.opacity > 0) {
+      const t = L.thickness, len = L.length, off = alignOffset(L.offset, t, visibleArms(L).length);
+      const oddZero = off === 0 && t % 2 === 1;
+      const neg = oddZero ? 0 : off % 2 ? Math.floor((off + 1) / 2) : Math.floor(off / 2) + 1;
+      const pos = oddZero ? 0 : off % 2 ? Math.floor((off + 1) / 2) : Math.floor(off / 2);
+      const half = Math.floor(t / 2), spread = L.spread || 0;
+      const arms = { top: [-half, -neg - len + 1 - spread, t, len], bottom: [-half, pos + spread, t, len],
+        left: [-neg - len + 1 - spread, -half, len, t], right: [pos + spread, -half, len, t] };
+      for (const arm of visibleArms(L)) {
+        const [x, y, w, h] = arms[arm];
+        lines += group(path(rect(x, y, w, h), L), 'lines');
+        if (O.enabled && O.opacity > 0) {
+          const o = Math.max(1, Math.round(O.thickness));
+          const border = rect(x-o,y-o,w+2*o,o) + rect(x-o,y+h,w+2*o,o) + rect(x-o,y,o,h) + rect(x+w,y,o,h);
+          outlines += group(path(border, O), 'outline');
+        }
+      }
+    }
+    if (D.enabled && D.opacity > 0) {
+      const color = D.useMainColor ? L.color : D.color;
+      const radius = D.size / 2;
+      const shape = (grow, outline) => {
+        if (D.shape === 'square') {
+          const start = -Math.floor(D.size / 2);
+          const border = rect(start-grow,start-grow,D.size+2*grow,grow) + rect(start-grow,start+D.size,D.size+2*grow,grow) + rect(start-grow,start,grow,D.size) + rect(start+D.size,start,grow,D.size);
+          return `<path d="${outline ? border : rect(start,start,D.size,D.size)}" fill="${outline ? O.color : color}" fill-opacity="${outline ? O.opacity : D.opacity}"/>`;
+        }
+        if (outline && D.shape === 'circle') return `<circle r="${radius+grow}" fill="${O.color}" fill-opacity="${O.opacity}"/>`;
+        return `<circle r="${outline ? radius+D.thickness/2+grow/2 : radius}" fill="${D.shape === 'ring' ? 'none' : color}" fill-opacity="${D.opacity}" stroke="${outline ? O.color : color}" stroke-opacity="${outline ? O.opacity : D.opacity}" stroke-width="${outline ? grow : D.shape === 'ring' ? D.thickness : 0}"/>`;
+      };
+      dot = group(group(shape(0, false), 'dot'), 'dot');
+      if (O.enabled) dotOutline = group(group(shape(Math.max(1, Math.round(O.thickness)), true), 'dot'), 'outline');
+    }
+    const body = `<g transform="translate(${size/2},${size/2}) scale(${s})"><g transform="rotate(${l.rotation})">${outlines}</g>${dotOutline}${dot}<g transform="rotate(${l.rotation})">${lines}</g></g>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size*resolution}" height="${size*resolution}" viewBox="0 0 ${size} ${size}"><defs>${filters}</defs>${body}</svg>`;
+    return { size: size * resolution, src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) };
+  }
+
+  function usesSvg(l) {
+    return l.renderer === 'svg' && l.kind === 'shape' && l.lines.shape === 'rectangle' && l.lines.count === 4 &&
+      (!l.dot.enabled || ['circle', 'square', 'ring'].includes(l.dot.shape));
+  }
+
+  async function prepareCrosshair(ch, opts = {}) {
+    for (let i = 0; i < ch.layers.length; i++) {
+      const layer = ch.layers[i];
+      if (!layer.visible || !usesSvg(layer)) continue;
+      const l = firedLayer(layer, (opts.fire && opts.fire[i]) || 0);
+      const { src } = modelSvg(l, l.scale * (opts.scale || 1), opts.resolution || 1);
+      getImage(src);
+      const img = imageCache.get(src);
+      if (img && img.decode) {
+        await img.decode();
+        rasterizeSvg(src, img);
+      }
+    }
   }
 
   /** Scratch canvases reused across frames (keyed by slot). */
@@ -1113,6 +1208,23 @@
       const l = firedLayer(layer, (opts.fire && opts.fire[i]) || 0);
       const x = cx + l.offsetX * g;
       const y = cy + l.offsetY * g;
+      if (usesSvg(l)) {
+        const resolution = opts.resolution || 1;
+        const { src, size } = modelSvg(l, l.scale * g, resolution);
+        const img = getImage(src);
+        if (img) ctx.drawImage(img, x * resolution - size / 2, y * resolution - size / 2, size, size);
+        return;
+      }
+      if (opts.resolution && opts.resolution !== 1) {
+        const r = opts.resolution;
+        const off = new OffscreenCanvas(Math.ceil(ctx.canvas.width/r), Math.ceil(ctx.canvas.height/r));
+        drawLayer(off.getContext('2d'), l, x, y, l.scale * g);
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(off, 0, 0, off.width*r, off.height*r);
+        ctx.restore();
+        return;
+      }
       drawLayer(ctx, l, x, y, l.scale * g);
     });
   }
@@ -1333,6 +1445,7 @@
     crosshairExtent,
     overlaySizePx,
     drawCrosshair,
+    prepareCrosshair,
     layerBounds,
     onImageLoaded,
     primeImage,

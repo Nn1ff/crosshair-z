@@ -417,10 +417,18 @@
       paintBackground(ctx, g.W, g.H);
       drawGrid(g);
       drawGuides(g);
-      const off = new OffscreenCanvas(g.srcW, g.srcH);
-      C.drawCrosshair(off.getContext('2d'), st.draft, g.cx, g.cy, { scale: opts.getScale(), fire: st.anim.levels });
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(off, g.ox, g.oy, g.srcW * g.z, g.srcH * g.z);
+      for (let i = 0; i < st.draft.layers.length; i++) {
+        const one = { ...st.draft, layers: st.draft.layers.map((l, j) => j === i ? l : { ...l, visible: false }) };
+        if (one.layers[i].renderer === 'svg') {
+          C.drawCrosshair(ctx, one, g.cx + g.ox / g.z, g.cy + g.oy / g.z,
+            { scale: opts.getScale(), fire: st.anim.levels, resolution: g.z });
+        } else {
+          const off = new OffscreenCanvas(g.srcW, g.srcH);
+          C.drawCrosshair(off.getContext('2d'), one, g.cx, g.cy, { scale: opts.getScale(), fire: st.anim.levels });
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(off, g.ox, g.oy, g.srcW * g.z, g.srcH * g.z);
+        }
+      }
       drawSelection(g);
       drawActual();
       $('dzZoomLabel').textContent = `${st.zoom}×`;

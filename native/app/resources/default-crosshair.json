@@ -5,6 +5,7 @@
       "name": "Layer 1",
       "visible": true,
       "kind": "shape",
+      "renderer": "canvas",
       "offsetX": 0,
       "offsetY": 0,
       "rotation": 0,

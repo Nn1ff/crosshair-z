@@ -1,0 +1,67 @@
+{
+  "name": "dom fortnite",
+  "pos": {
+    "x": 0,
+    "y": 0
+  },
+  "model": [
+    {
+      "dot": {
+        "diameter": 4,
+        "opacity": 0,
+        "color": "#ff0000",
+        "shape": "circle",
+        "blur": 0
+      },
+      "line": {
+        "length": 2.5,
+        "thickness": 1,
+        "offset": 0,
+        "opacity": 1,
+        "color": "#FFFFFF",
+        "shape": "rectangle",
+        "blur": 0,
+        "rotation": 0,
+        "visible": [
+          "left",
+          "right",
+          "top",
+          "bottom"
+        ]
+      },
+      "outline": {
+        "thickness": 0,
+        "opacity": 0.7,
+        "color": "#5900ff",
+        "blur": 1
+      },
+      "firingOptions": {
+        "tShapeWhenFiring": false,
+        "firingOffset": 0,
+        "bloomDirection": "inward",
+        "finalOpacity": 1,
+        "dot": {},
+        "line": {},
+        "outline": {},
+        "mouseButton": "left",
+        "loop": false,
+        "position": {},
+        "layer": {},
+        "easing": "linear",
+        "version": 2,
+        "direction": "normal",
+        "pressType": "hold",
+        "releaseBehavior": "reset"
+      },
+      "position": {
+        "x": -2,
+        "y": -1
+      },
+      "layer": {
+        "size": 2.5
+      },
+      "migrationVersion": 2,
+      "type": "model"
+    }
+  ]
+}

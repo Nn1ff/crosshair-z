@@ -175,7 +175,7 @@ impl App {
                 }
                 Err(err) => {
                     logger::error("update launch failed", json!({"exe": exe.display().to_string(), "error": err.to_string()}));
-                    self.set_update(UpdateStatus::Error, Some(format!("Could not start the new version: {err}")));
+                    self.set_update(UpdateStatus::Error, Some(format!("Could not start the new version: {}", updater::file_error(&err))));
                 }
             },
             UpdateEvent::HandoverTimeout => {

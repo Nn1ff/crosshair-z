@@ -175,6 +175,7 @@ function convertModel(m, index, pos) {
     shape = 'rectangle';
   }
   const count = clampInt(num(line.armCount, 4), 3, 8);
+  const svg = shape === 'rectangle' && count === 4 && (!dotOn || ['circle', 'square', 'ring'].includes(dot.shape || 'circle'));
   if (linesOn && count !== 4 && Array.isArray(line.visibleArms)) warnings.push('hidden radial arms are shown');
   if (linesOn && shape === 'arc' && line.capStyle === 'angled') warnings.push('angled arc caps drawn flat');
   const dotShape = core.DOT_SHAPES.includes(dot.shape) ? dot.shape : 'circle';
@@ -184,6 +185,7 @@ function convertModel(m, index, pos) {
     name: `Layer ${index + 1}`.slice(0, LAYER_NAME_MAX),
     visible: true,
     kind: 'shape',
+    renderer: svg ? 'svg' : 'canvas',
     offsetX: Math.round(num(position.x) + num(pos.x)),
     offsetY: Math.round(num(position.y) + num(pos.y)),
     rotation: normAngle(num(line.rotation)),
@@ -193,7 +195,7 @@ function convertModel(m, index, pos) {
       shape,
       color: color(line.color, '#ffffff'),
       opacity: num(line.opacity, 1),
-      length: Math.round(num(line.length)),
+      length: num(line.length),
       thickness: Math.max(1, thickness),
       offset: Math.round(num(line.offset)),
       blur: num(line.blur),
@@ -221,8 +223,8 @@ function convertModel(m, index, pos) {
     outline: {
       // X draws the outline whenever it is visible; thickness 0 still renders 1px (crispThickness)
       enabled: num(outline.opacity) > 0,
-      // X scales the outline with the layer, Z draws it unscaled
-      thickness: Math.max(1, Math.round(Math.max(1, Math.round(num(outline.thickness, 1))) * scale)),
+      // SVG retains local outline units; the legacy Canvas path needs a scaled approximation.
+      thickness: svg ? Math.max(1, Math.round(num(outline.thickness, 1))) : Math.max(1, Math.round(Math.max(1, Math.round(num(outline.thickness, 1))) * scale)),
       color: color(outline.color, '#000000'),
       opacity: num(outline.opacity, 1),
       blur: num(outline.blur),

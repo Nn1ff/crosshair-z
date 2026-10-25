@@ -73,11 +73,12 @@
     return { ...ch, layers: ch.layers.map((l, j) => (j === index ? l : { ...l, visible: false })) };
   }
 
-  function renderSprites(ch, scale, size, levels) {
+  async function renderSprites(ch, scale, size, levels) {
     const ctx = newContext(size);
     const layers = [];
-    ch.layers.forEach((layer, i) => {
-      if (!layer.visible) return;
+    for (let i = 0; i < ch.layers.length; i++) {
+      const layer = ch.layers[i];
+      if (!layer.visible) continue;
       const fire = !!(layer.firing && layer.firing.enabled);
       const n = fire ? levels : 1;
       const only = solo(ch, i);
@@ -85,12 +86,13 @@
       for (let k = 0; k < n; k++) {
         const fireLevels = [];
         fireLevels[i] = fire ? k / (n - 1) : 0;
+        await C.prepareCrosshair(only, { scale, fire: fireLevels });
         ctx.clearRect(0, 0, size, size);
         C.drawCrosshair(ctx, only, size / 2, size / 2, { scale, fire: fireLevels });
         frames.push(cropFrame(ctx.getImageData(0, 0, size, size).data, size));
       }
       layers.push({ fireSpeedMs: fire ? layer.firing.speed : null, frames });
-    });
+    }
     return F.encodeSpriteSet({ sizePx: size, layers });
   }
 
@@ -103,7 +105,7 @@
     const ch = C.sanitizeCrosshair(raw);
     const size = C.overlaySizePx(ch, scale);
     await prepareAssets(ch, scale, size);
-    const bytes = renderSprites(ch, scale, size, LEVELS);
+    const bytes = await renderSprites(ch, scale, size, LEVELS);
     if (bytes.length <= MAX_SET_BYTES) return bytes;
     console.warn('sprite set too large, using fewer firing levels', { bytes: bytes.length });
     return renderSprites(ch, scale, size, REDUCED_LEVELS);
@@ -119,6 +121,7 @@
     await prepareAssets(ch, scale, size);
     const ctx = newContext(size);
     const fireLevels = ch.layers.map((l) => (l.firing && l.firing.enabled ? level : 0));
+    await C.prepareCrosshair(ch, { scale, fire: fireLevels });
     C.drawCrosshair(ctx, ch, size / 2, size / 2, { scale, fire: fireLevels });
     return { size, bgra: F.rgbaToBgraPremul(ctx.getImageData(0, 0, size, size).data) };
   }
