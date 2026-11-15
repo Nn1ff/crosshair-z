@@ -6,7 +6,7 @@ Closing settings leaves the native overlay running without a browser process.
 
 ## Run
 
-Download `Crosshair-Z.exe` from the `v2.0.0` release and run it on Windows.
+Download `Crosshair-Z.exe` from the [latest release](https://github.com/Nn1ff/crosshair-z/releases/latest) and run it on Windows.
 Microsoft Edge WebView2 Runtime is required for settings and generating uncached crosshairs.
 This portable app is unsigned and may trigger Windows SmartScreen.
 

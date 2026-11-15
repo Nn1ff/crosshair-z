@@ -76,11 +76,11 @@ Captured from the native 2.0 settings window with isolated sample data.
 | **RAM** | ~5 MB private working set measured with settings closed; opening settings also starts WebView2 processes |
 | **Privacy** | No account, telemetry or ads. One optional update check against GitHub (can be turned off) |
 | **Anti-cheat** | A plain transparent window above the game: no DLL injection, no hooks, no memory reading |
-| **Footprint** | ~3.85 MB portable Rust exe; WebView2 Runtime for settings/rendering; no background services |
+| **Footprint** | ~4 MB portable Rust exe; WebView2 Runtime for settings/rendering; no background services |
 
 ## Updating
 
-When a new version is out, Settings shows **Update**. Crosshair Z downloads the new exe next to the current one, switches over automatically and removes the old copy. Autostart (if enabled) follows the new version, so you never end up with two entries.
+When a new version is out, Settings shows **Update**. Crosshair Z downloads the new exe next to the current one, switches over automatically and removes the old copies it downloaded earlier. Autostart (if enabled) follows the new version, so you never end up with two entries.
 
 ## FAQ
 
