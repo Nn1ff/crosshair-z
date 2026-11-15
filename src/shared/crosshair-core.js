@@ -24,7 +24,11 @@
   const MAX_LAYERS = 64;
   const OVERLAY_PADDING_PX = 4;
   const MIN_OVERLAY_PX = 32;
-  const MAX_IMAGE_CACHE = 32;
+  const MAX_SHARE_CODE_CHARS = 2000000; // largest legit code ≈ 1.9 M (measured 1,884,166); same cap as the clipboard
+  const MAX_DRAW_SRC_CHARS = 32768; // a 64×64 drawing PNG stays far below this
+  const MAX_IMAGE_CACHE = 256;
+  const MAX_IMAGE_CACHE_PIXELS = 64 * 1024 * 1024;
+  const MAX_BOUNDS_SIDE = 4096; // larger layers get an estimated selection box instead of a pixel scan
   const BLUR_REACH = 3; // gaussian blur visibly spreads ~3σ
   const OUTLINE_MITER_LIMIT = 4; // SVG default, matches Crosshair Y triangle outlines
   const ARMS = ['top', 'bottom', 'left', 'right'];
@@ -411,12 +415,15 @@
 
   /**
    * Validate crosshair. Accepts v3, v2 ({layers} with per-side gap) and legacy v1 (flat single design).
+   * Never throws: non-array `layers` count as none, non-object layers are dropped, missing or null
+   * parts take their defaults; with nothing left the result is the default crosshair.
    * @param {unknown} input
    * @returns {{version: number, layers: object[]}}
    */
   function sanitizeCrosshair(input) {
     const src = isObj(input) ? input : {};
-    const rawLayers = isLegacyCrosshair(src) ? upgradeLegacy(src) : src.layers.filter(isObj);
+    const v3Layers = Array.isArray(src.layers) ? src.layers : [];
+    const rawLayers = isLegacyCrosshair(src) ? upgradeLegacy(src) : v3Layers.filter(isObj);
     const layers = rawLayers.slice(0, MAX_LAYERS).map(sanitizeLayer);
     if (layers.length === 0) layers.push(clone(DEFAULT_LAYER));
     return { version: SCHEMA_VERSION, layers };
@@ -672,12 +679,82 @@
 
   // ---------- drawing ----------
 
+  /** Decoded images by source URL, least recently used first (Map keeps insertion order). */
   const imageCache = new Map();
   let imageListener = null;
+  let notifyPending = false;
+  let listenerRunning = false;
+  /** Draws that found an image (or web font) still loading; see `imageCacheMisses`. */
+  let assetMisses = 0;
+  /**
+   * Sources the latest listener run drew. They are not evicted until the next run: when one redraw
+   * needs more than the caps, evicting its own images would make every load trigger another full
+   * redraw that misses again (an endless decode loop); the caps hold again once the drawn set shrinks.
+   */
+  let pinned = new Set();
 
-  /** Register callback fired when an image layer finishes decoding (to trigger re-render). */
+  /** Register the callback fired (at most once per animation frame) when images or fonts finish loading. */
   function onImageLoaded(cb) {
-    imageListener = cb;
+    imageListener = typeof cb === 'function' ? cb : null;
+    pinned = new Set();
+  }
+
+  function runImageListener() {
+    notifyPending = false; // first, so a throwing listener cannot block later notifications
+    if (!imageListener) return;
+    pinned = new Set();
+    listenerRunning = true;
+    try {
+      imageListener();
+    } finally {
+      listenerRunning = false;
+    }
+  }
+
+  /**
+   * How many draws so far found an image or web font still loading (drawn without it; the load
+   * listener runs once it is ready). Read before and after rendering a list: no change means that
+   * render is complete and a later load cannot change it. Failed images do not count.
+   */
+  function imageCacheMisses() {
+    return assetMisses;
+  }
+
+  /** Coalesce load notifications: however many images load, the listener runs once per frame. */
+  function notifyImageLoaded() {
+    if (notifyPending) return;
+    notifyPending = true;
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(runImageListener);
+    else setTimeout(runImageListener, 0);
+  }
+
+  /** Pixel count of a cached entry (an Image counts 0 until it has decoded). */
+  function imagePixels(img) {
+    return (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0);
+  }
+
+  /** Mark an entry most recently used (and drawn by the running listener, if one runs). */
+  function touchImage(src, img) {
+    imageCache.delete(src);
+    imageCache.set(src, img);
+    if (listenerRunning) pinned.add(src);
+  }
+
+  /**
+   * The one way into the cache: insert as most recently used, then evict the least recently used
+   * entries until both the entry cap and the pixel cap hold. The entry just put is never evicted, so
+   * an image larger than the whole budget is still served; neither are pinned entries (see `pinned`).
+   */
+  function putImage(src, img) {
+    touchImage(src, img);
+    let pixels = 0;
+    for (const v of imageCache.values()) pixels += imagePixels(v);
+    for (const [key, value] of imageCache) {
+      if (imageCache.size <= MAX_IMAGE_CACHE && pixels <= MAX_IMAGE_CACHE_PIXELS) break;
+      if (key === src || pinned.has(key)) continue;
+      imageCache.delete(key);
+      pixels -= imagePixels(value);
+    }
   }
 
   /**
@@ -688,26 +765,38 @@
     if (!src || typeof OffscreenCanvas === 'undefined') return;
     const copy = new OffscreenCanvas(source.width, source.height);
     copy.getContext('2d').drawImage(source, 0, 0);
-    imageCache.set(src, copy);
-    if (imageCache.size > MAX_IMAGE_CACHE) imageCache.delete(imageCache.keys().next().value);
+    putImage(src, copy);
   }
 
+  /**
+   * Cached image for a data URL, or null while it is still decoding (decoding starts on the first
+   * request; the load listener fires when it is ready). A hit makes the entry most recently used.
+   */
   function getImage(src) {
-    if (!src || typeof Image === 'undefined') return null;
+    if (!src) return null;
     let img = imageCache.get(src);
-    if (typeof OffscreenCanvas !== 'undefined' && img instanceof OffscreenCanvas) return img;
-    if (!img) {
-      img = new Image();
-      img.onload = () => {
-        if (src.startsWith('data:image/svg+xml;')) rasterizeSvg(src, img);
-        if (imageListener) imageListener();
+    if (img) {
+      touchImage(src, img);
+      if (typeof OffscreenCanvas !== 'undefined' && img instanceof OffscreenCanvas) return img;
+    } else {
+      if (typeof Image === 'undefined') return null;
+      const fresh = new Image();
+      fresh.onload = () => {
+        if (imageCache.get(src) !== fresh) return; // evicted (or replaced) while decoding
+        if (src.startsWith('data:image/svg+xml;')) rasterizeSvg(src, fresh);
+        else putImage(src, fresh); // its size is known now: re-check the pixel budget
+        notifyImageLoaded();
       };
-      img.onerror = () => console.warn('crosshair image failed to decode');
-      img.src = src;
-      imageCache.set(src, img);
-      if (imageCache.size > MAX_IMAGE_CACHE) imageCache.delete(imageCache.keys().next().value);
+      fresh.onerror = () => console.warn('crosshair image failed to decode');
+      putImage(src, fresh);
+      fresh.src = src;
+      img = fresh;
     }
-    if (!img.complete || !img.naturalWidth) return null;
+    if (!img.complete) {
+      assetMisses++; // still decoding: its load notifies the listener
+      return null;
+    }
+    if (!img.naturalWidth) return null; // failed to decode: no load will follow
     return src.startsWith('data:image/svg+xml;') ? rasterizeSvg(src, img) : img;
   }
 
@@ -719,7 +808,7 @@
     if (cached instanceof OffscreenCanvas) return cached;
     const canvas = new OffscreenCanvas(img.naturalWidth, img.naturalHeight);
     canvas.getContext('2d').drawImage(img, 0, 0);
-    imageCache.set(src, canvas);
+    putImage(src, canvas);
     return canvas;
   }
 
@@ -1103,15 +1192,30 @@
   }
 
   const requestedFonts = new Set();
+  /** Requested fonts not loaded yet: text drawn with them uses a fallback until they are. */
+  const loadingFonts = new Set();
 
   /** Canvas text needs the web font loaded; load once and re-render through the asset listener. */
   function ensureFont(font) {
-    if (typeof document === 'undefined' || !document.fonts || requestedFonts.has(font)) return;
+    if (typeof document === 'undefined' || !document.fonts) return;
+    if (loadingFonts.has(font)) {
+      assetMisses++;
+      return;
+    }
+    if (requestedFonts.has(font)) return;
     requestedFonts.add(font);
     if (document.fonts.check(font)) return;
+    loadingFonts.add(font);
+    assetMisses++;
     document.fonts.load(font).then(
-      () => imageListener && imageListener(),
-      (err) => console.warn('crosshair font failed to load', err),
+      () => {
+        loadingFonts.delete(font);
+        notifyImageLoaded();
+      },
+      (err) => {
+        loadingFonts.delete(font);
+        console.warn('crosshair font failed to load', err);
+      },
     );
   }
 
@@ -1231,19 +1335,35 @@
 
   /**
    * Pixel bounding box of one layer as rendered (alpha > 0), relative to crosshair center.
-   * Browser only (needs OffscreenCanvas). Returns null when layer draws nothing.
+   * Browser only (needs OffscreenCanvas). Returns null when layer draws nothing. Never throws: a
+   * layer too large to scan (or a failing pixel read) gets its full overlay square as an estimate.
    * @returns {{x:number,y:number,w:number,h:number}|null}
    */
   function layerBounds(ch, index, opts = {}) {
     if (typeof OffscreenCanvas === 'undefined') return null;
-    const l = ch.layers[index];
+    const l = ch && Array.isArray(ch.layers) ? ch.layers[index] : null;
     if (!l) return null;
     const solo = { layers: ch.layers.map((x, i) => Object.assign({}, x, { visible: i === index })) };
-    const size = overlaySizePx(solo, opts.scale || 1);
-    const c = new OffscreenCanvas(size, size);
-    const ctx = c.getContext('2d', { willReadFrequently: true });
-    drawCrosshair(ctx, solo, size / 2, size / 2, opts);
-    const data = ctx.getImageData(0, 0, size, size).data;
+    let size;
+    try {
+      size = overlaySizePx(solo, opts.scale || 1);
+    } catch (err) {
+      console.warn('layer bounds unavailable:', err && err.message);
+      return null;
+    }
+    if (!Number.isFinite(size)) return null;
+    const estimate = { x: -size / 2, y: -size / 2, w: size, h: size };
+    if (size > MAX_BOUNDS_SIDE) return estimate;
+    let data;
+    try {
+      const c = new OffscreenCanvas(size, size);
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      drawCrosshair(ctx, solo, size / 2, size / 2, opts);
+      data = ctx.getImageData(0, 0, size, size).data;
+    } catch (err) {
+      console.warn('layer bounds estimated, pixel scan failed:', err && err.message);
+      return estimate;
+    }
     let minX = size, minY = size, maxX = -1, maxY = -1;
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -1310,11 +1430,13 @@
   }
 
   /**
-   * Decode share code (CZ3, or older CZ2 / CZ1). Throws Error with readable message when invalid.
+   * Decode share code (CZ3, or older CZ2 / CZ1). Throws Error with readable message when invalid
+   * or longer than MAX_SHARE_CODE_CHARS. Drawing sources above MAX_DRAW_SRC_CHARS are dropped.
    * @param {string} code
    * @returns {{version: number, layers: object[]}}
    */
   function decodeShareCode(code) {
+    if (typeof code === 'string' && code.length > MAX_SHARE_CODE_CHARS) throw new Error('share code too long');
     const trimmed = typeof code === 'string' ? code.trim() : '';
     const prefix = [SHARE_PREFIX, ...LEGACY_SHARE_PREFIXES].find((p) => trimmed.startsWith(p));
     if (!prefix) throw new Error('Code must start with ' + SHARE_PREFIX);
@@ -1333,6 +1455,7 @@
     ch.layers.forEach((l) => {
       if (l.kind === 'image') l.kind = 'shape'; // images are never shared
       l.image.src = '';
+      if (l.draw.src.length > MAX_DRAW_SRC_CHARS) l.draw.src = '';
     });
     return ch;
   }
@@ -1432,6 +1555,11 @@
     DEFAULT_CROSSHAIR,
     MAX_LAYERS,
     MAX_IMAGE_CHARS,
+    MAX_SHARE_CODE_CHARS,
+    MAX_DRAW_SRC_CHARS,
+    MAX_IMAGE_CACHE,
+    MAX_IMAGE_CACHE_PIXELS,
+    MAX_BOUNDS_SIDE,
     PRESETS,
     SHARE_PREFIX,
     LINE_SHAPES,
@@ -1448,7 +1576,9 @@
     prepareCrosshair,
     layerBounds,
     onImageLoaded,
+    imageCacheMisses,
     primeImage,
+    getImage,
     FireAnimator,
     firedLayer,
     hasFiring,

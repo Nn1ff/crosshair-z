@@ -15,8 +15,10 @@ pub const MAX_LAYERS: usize = 64;
 const MIN_SCALE: f64 = 0.25;
 const MAX_SCALE: f64 = 4.0;
 
+/// Hotkey actions that nudge the crosshair (the only ones that repeat while held).
+pub const MOVE_ACTIONS: [&str; 4] = ["moveUp", "moveDown", "moveLeft", "moveRight"];
 /// Hotkey actions in config order (`DEFAULT_HOTKEYS` keys).
-pub const HOTKEY_ACTIONS: [&str; 8] = ["toggle", "next", "prev", "settings", "moveUp", "moveDown", "moveLeft", "moveRight"];
+pub const HOTKEY_ACTIONS: [&str; 8] = ["toggle", "next", "prev", "settings", MOVE_ACTIONS[0], MOVE_ACTIONS[1], MOVE_ACTIONS[2], MOVE_ACTIONS[3]];
 pub const DEFAULT_TOGGLE_HOTKEY: &str = "Alt+Shift+X";
 /// Toggle default before config v4.
 const LEGACY_TOGGLE_DEFAULT: &str = "CommandOrControl+Shift+X";
@@ -385,6 +387,16 @@ fn sanitize_hotkeys(src: &Map<String, Value>, version: f64) -> Hotkeys {
     out
 }
 
+/// True when `cfg` (the sanitized `raw`) loses library data: `raw` was written by a newer config
+/// version, its `profiles` is not an array, or the repair rules dropped profiles.
+pub fn is_lossy(raw: &Value, cfg: &Config) -> bool {
+    let newer = raw.get("version").and_then(js_number).is_some_and(|v| v > f64::from(CONFIG_VERSION));
+    let profiles = raw.get("profiles");
+    let not_a_list = profiles.is_some_and(|p| !p.is_array());
+    let dropped = profiles.and_then(Value::as_array).is_some_and(|list| list.iter().filter(|p| p.is_object()).count() > cfg.profiles.len());
+    newer || not_a_list || dropped
+}
+
 /// Validate a full config. Never fails; repairs instead (store.js `sanitizeConfig`).
 pub fn sanitize(raw: &Value, d: &Defaults) -> Config {
     let src = obj(Some(raw));
@@ -634,5 +646,16 @@ mod tests {
     fn rc_mode_helpers() {
         assert!(RcMode::HideHold.is_hold() && RcMode::HideHold.is_hide());
         assert!(!RcMode::SwitchToggle.is_hold() && !RcMode::SwitchToggle.is_hide());
+    }
+
+    #[test]
+    fn lossy_detection() {
+        let lossy = |raw: Value| is_lossy(&raw, &sanitize(&raw, &d()));
+        let list = |n: usize| -> Vec<Value> { (0..n).map(|i| prof(&format!("p{i}"))).collect() };
+        assert!(!lossy(json!({"version": 5, "profiles": list(16)})), "normal library");
+        assert!(!lossy(json!({"version": 5, "profiles": []})), "empty list only gains the default profile");
+        assert!(lossy(json!({"version": 6, "profiles": list(16)})), "written by a newer version");
+        assert!(lossy(json!({"version": 5, "profiles": {}})), "profiles not an array");
+        assert!(lossy(json!({"version": 5, "profiles": list(250)})), "profiles above the cap are dropped");
     }
 }

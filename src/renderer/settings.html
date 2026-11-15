@@ -86,6 +86,7 @@
 </nav>
 
 <div class="shell">
+  <p class="block warn hidden" id="readOnlyWarn" role="alert">Your saved crosshairs could not be read. Changes are not saved this session.</p>
   <header class="topbar">
     <div class="tabs" id="tabs" role="tablist"></div>
   </header>
@@ -178,7 +179,7 @@
         </div>
         <div class="block">
           <h2>Import code</h2>
-          <textarea id="importCode" rows="3" placeholder="Paste a CZ2- code" spellcheck="false"></textarea>
+          <textarea id="importCode" rows="3" maxlength="2000001" placeholder="Paste a CZ2- code" spellcheck="false"></textarea>
           <div class="row">
             <button class="btn ghost" id="btnPaste">Paste</button>
             <button class="btn" id="btnImport"><svg><use href="#i-import"/></svg>Import code</button>
@@ -367,6 +368,7 @@
 <script src="../shared/crosshairx-import.js"></script>
 <script src="common.js"></script>
 <script src="sounds.js"></script>
+<script src="input-utils.js"></script>
 <script src="designer.js"></script>
 <script src="settings.js"></script>
 </body>

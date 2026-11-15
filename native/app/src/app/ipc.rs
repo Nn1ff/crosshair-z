@@ -123,6 +123,8 @@ impl App {
             "kbAlt": self.rt.kb_alt,
             "launchHidden": self.rt.launch_hidden,
             "mouseAvailable": true,
+            // the saved library could not be read: settings warns that nothing is saved this session
+            "readOnly": self.store.read_only(),
             "update": self.update_value(),
         })
     }
@@ -188,7 +190,7 @@ impl App {
                     Value::String(s) => s.clone(),
                     other => other.to_string(),
                 };
-                clipboard::write_text(&text).map(|()| Value::Null)
+                clipboard::write_text(&text).map(|()| json!(true))
             }
             "clipboard:read" => clipboard::read_text().map(Value::String),
             "log:path" => Ok(json!(logger::log_file().map(|p| p.display().to_string()))),
@@ -272,7 +274,9 @@ impl App {
         if activate {
             next.active_profile_id = id.clone();
             next.enabled = true;
+            // the new crosshair shows: no keyboard or right-click alternate in front of it
             self.rt.kb_alt = false;
+            self.rt.rc_alt = false;
         }
         self.store.set(next);
         self.changed();
@@ -318,8 +322,8 @@ impl App {
                 crosshair: it.get("crosshair").cloned().unwrap_or(Value::Null),
             });
         }
-        next.active_profile_id = last;
-        next.enabled = true;
+        // the last import is equipped like any other equip (alternates and launch-hidden end)
+        crate::state::equip(&mut next, &mut self.rt, &last);
         self.store.set(next);
         logger::info("imported crosshairs", json!({"count": items.len(), "duplicates": duplicates, "overLimit": over_limit}));
         self.changed();

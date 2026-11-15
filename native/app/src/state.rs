@@ -57,6 +57,7 @@ pub fn effective<'a>(c: &'a Config, rt: &Runtime) -> (bool, &'a Profile) {
 /// Make a profile active and show it.
 pub fn equip(c: &mut Config, rt: &mut Runtime, id: &str) {
     rt.kb_alt = false;
+    rt.rc_alt = false;
     rt.launch_hidden = false;
     c.active_profile_id = id.to_string();
     c.enabled = true;
@@ -64,17 +65,20 @@ pub fn equip(c: &mut Config, rt: &mut Runtime, id: &str) {
 
 /// Show/hide hotkey. In 'hide' mode it drives `enabled` (same flag as the app switch); when the
 /// crosshair is off any mode turns it back on; 'switch' mode otherwise swaps to the alternate.
+/// Changing `enabled` also ends a right-click alternate, so switching on shows the main crosshair.
 /// Returns true when `c` changed (must be saved).
 pub fn keyboard_toggle(c: &mut Config, rt: &mut Runtime) -> bool {
     if rt.launch_hidden {
         rt.launch_hidden = false;
         if !c.enabled {
             c.enabled = true;
+            rt.rc_alt = false;
             return true;
         }
         false
     } else if c.toggle.mode == ToggleMode::Hide || !c.enabled {
         rt.kb_alt = false;
+        rt.rc_alt = false;
         c.enabled = !c.enabled;
         true
     } else {
@@ -87,6 +91,7 @@ pub fn keyboard_toggle(c: &mut Config, rt: &mut Runtime) -> bool {
 pub fn tray_toggle_enabled(c: &mut Config, rt: &mut Runtime) {
     rt.launch_hidden = false;
     rt.kb_alt = false;
+    rt.rc_alt = false;
     c.enabled = !c.enabled;
 }
 
@@ -140,8 +145,12 @@ pub fn crosshair_has_firing(ch: &Value) -> bool {
     })
 }
 
-/// Mouse polling is needed for right-click modes or any profile that can be shown with firing.
-pub fn needs_mouse(c: &Config) -> bool {
+/// Mouse polling is needed only while the crosshair can show (switched on, not hidden on launch),
+/// and then for right-click modes or any profile that can be shown with firing.
+pub fn needs_mouse(c: &Config, rt: &Runtime) -> bool {
+    if !c.enabled || rt.launch_hidden {
+        return false;
+    }
     if c.right_click.mode != RcMode::Off {
         return true;
     }
@@ -315,10 +324,60 @@ mod tests {
         assert!(!crosshair_has_firing(&c.profiles[0].crosshair));
         assert!(crosshair_has_firing(&c.profiles[1].crosshair));
         assert!(!crosshair_has_firing(&c.profiles[2].crosshair), "hidden layer does not count");
-        assert!(!needs_mouse(&c));
-        assert!(needs_mouse(&cfg(json!({"activeProfileId": "b"}))));
-        assert!(needs_mouse(&cfg(json!({"toggle": {"mode": "switch", "profileId": "b"}}))));
-        assert!(needs_mouse(&cfg(json!({"rightClick": {"mode": "hideHold"}}))));
+        let rt = Runtime::default();
+        assert!(!needs_mouse(&c, &rt));
+        assert!(needs_mouse(&cfg(json!({"activeProfileId": "b"})), &rt));
+        assert!(needs_mouse(&cfg(json!({"toggle": {"mode": "switch", "profileId": "b"}})), &rt));
+        assert!(needs_mouse(&cfg(json!({"rightClick": {"mode": "hideHold"}})), &rt));
+    }
+
+    #[test]
+    fn needs_mouse_false_when_disabled_or_launch_hidden() {
+        let firing_and_rc = json!({"activeProfileId": "b", "rightClick": {"mode": "hideHold"}});
+        let c = cfg(firing_and_rc.clone());
+        assert!(needs_mouse(&c, &Runtime::default()), "shown: polling needed");
+        assert!(!needs_mouse(&c, &Runtime { launch_hidden: true, ..Default::default() }), "hidden on launch");
+        let mut off = firing_and_rc;
+        off["enabled"] = json!(false);
+        assert!(!needs_mouse(&cfg(off), &Runtime::default()), "switched off");
+    }
+
+    #[test]
+    fn needs_mouse_true_for_rc_mode_when_enabled() {
+        let c = cfg(json!({"rightClick": {"mode": "hideHold"}}));
+        assert!(c.enabled && !crosshair_has_firing(&c.active_profile().crosshair));
+        assert!(needs_mouse(&c, &Runtime::default()));
+    }
+
+    #[test]
+    fn toggle_off_click_toggle_on_shows_main() {
+        for rc in [json!({"mode": "hideToggle"}), json!({"mode": "switchToggle", "profileId": "b"})] {
+            let mut c = cfg(json!({"rightClick": rc.clone()}));
+            let mut rt = Runtime { rc_alt: true, ..Default::default() };
+            assert!(keyboard_toggle(&mut c, &mut rt), "off");
+            assert!(keyboard_toggle(&mut c, &mut rt), "on");
+            let (visible, profile) = effective(&c, &rt);
+            assert_eq!((visible, profile.id.as_str()), (true, "a"), "{rc}");
+        }
+    }
+
+    #[test]
+    fn equip_and_tray_reset_rc_alt() {
+        let mut c = cfg(json!({"rightClick": {"mode": "hideToggle"}}));
+        let mut rt = Runtime { rc_alt: true, ..Default::default() };
+        equip(&mut c, &mut rt, "b");
+        assert!(!rt.rc_alt, "equip shows the new profile");
+        rt.rc_alt = true;
+        tray_toggle_enabled(&mut c, &mut rt);
+        assert!(!rt.rc_alt, "tray toggle");
+    }
+
+    #[test]
+    fn switch_mode_toggle_keeps_rc_alt() {
+        let mut c = cfg(json!({"toggle": {"mode": "switch", "profileId": "c"}, "rightClick": {"mode": "switchToggle", "profileId": "b"}}));
+        let mut rt = Runtime { rc_alt: true, ..Default::default() };
+        assert!(!keyboard_toggle(&mut c, &mut rt), "only swaps to the alternate");
+        assert!(rt.rc_alt, "enabled did not change");
     }
 
     #[test]

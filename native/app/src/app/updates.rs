@@ -48,11 +48,14 @@ pub struct UpdateState {
     pub status: UpdateStatus,
     pub release: Option<Release>,
     pub error: Option<String>,
+    /// false after the autostart entry could not be updated: it may still start an older exe,
+    /// so housekeeping keeps the old versions
+    pub login_item_ok: bool,
 }
 
 impl Default for UpdateState {
     fn default() -> Self {
-        UpdateState { status: UpdateStatus::Idle, release: None, error: None }
+        UpdateState { status: UpdateStatus::Idle, release: None, error: None, login_item_ok: true }
     }
 }
 
@@ -85,7 +88,7 @@ impl App {
     fn set_update(&mut self, status: UpdateStatus, error: Option<String>) {
         self.update.status = status;
         self.update.error = error;
-        self.emit("runtime:changed", self.runtime_value());
+        self.emit_with("runtime:changed", || self.runtime_value());
         self.refresh_tray();
     }
 
@@ -108,7 +111,9 @@ impl App {
 
     pub(super) fn housekeeping(&mut self) {
         let exe = instance::current_exe();
-        if let Some(dir) = exe.parent() {
+        if !self.update.login_item_ok {
+            logger::info("update cleanup skipped: the autostart entry could not be updated", None);
+        } else if let Some(dir) = exe.parent() {
             updater::cleanup_old_versions(dir, CURRENT, &exe);
         }
         system::remove_electron_leftovers(&paths::data_dir());
@@ -119,7 +124,7 @@ impl App {
             logger::info("login item untouched (dev build or isolated data dir)", None);
             return;
         }
-        system::apply_login_item(self.store.get().launch_at_login, &instance::current_exe());
+        self.update.login_item_ok = system::apply_login_item(self.store.get().launch_at_login, &instance::current_exe());
     }
 
     pub(super) fn on_check_updates_enabled(&mut self) {

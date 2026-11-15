@@ -25,7 +25,11 @@ const USER_AGENT: &str = "Crosshair-Z";
 const CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 const CHECK_RETRIES: u32 = 2;
 const RETRY_BASE: Duration = Duration::from_secs(2);
+/// WinHTTP timeout of each network operation of a download; a `.part` file that has not been
+/// written for this long belongs to no running download.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+/// Limit for a whole download (`DOWNLOAD_TIMEOUT` only bounds each operation).
+const DOWNLOAD_DEADLINE: Duration = Duration::from_secs(10 * 60);
 pub const MAX_ASSET_BYTES: u64 = 300 * 1024 * 1024;
 const MAX_JSON_BYTES: usize = 4 * 1024 * 1024;
 const READ_CHUNK: usize = 64 * 1024;
@@ -57,13 +61,17 @@ pub fn file_error(err: &std::io::Error) -> String {
     err.to_string()
 }
 
-/// `v1.2.3` / `1.2` → `1.2.3` / `1.2`; at most 4 numeric parts.
+/// `x.y.z`, digits only: the form of release versions and of versioned exe names.
+pub(crate) fn is_release_version(v: &str) -> bool {
+    let parts: Vec<&str> = v.split('.').collect();
+    parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// `v1.2.3` / `1.2.3` → `1.2.3`; anything but exactly three numeric parts → `None`.
 fn version_of(tag: &str) -> Option<String> {
     let t = tag.trim();
     let t = t.strip_prefix('v').unwrap_or(t);
-    let parts: Vec<&str> = t.split('.').collect();
-    let ok = !parts.is_empty() && parts.len() <= 4 && parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
-    ok.then(|| t.to_string())
+    is_release_version(t).then(|| t.to_string())
 }
 
 /// Returns a positive number when `a` is newer than `b`: dotted numbers (missing parts = 0); on equal numbers a
@@ -217,7 +225,9 @@ fn fetch_json(url: &str) -> Result<Option<Value>, HttpError> {
         Ok(())
     })?;
     if status == 404 {
-        return Ok(None); // no published release yet
+        // no published release yet, or the repository moved
+        logger::warn("releases endpoint returned 404", json!({"url": url}));
+        return Ok(None);
     }
     serde_json::from_slice(&body).map(Some).map_err(|e| HttpError { status: Some(status), message: format!("bad json: {e}") })
 }
@@ -255,19 +265,23 @@ pub fn versioned_exe_name(version: &str) -> String {
 
 /// Download next to the running exe via `.part`; verify release origin, size and SHA-256 before installation.
 pub fn download(release: &Release, dir: &Path) -> Result<PathBuf, String> {
-    if version_of(&release.version).as_deref() != Some(release.version.as_str()) || release.version.split('.').count() != 3 ||
-        !trusted_asset_url(&release.url, &release.version) || !valid_sha256(&release.sha256) || release.size == 0 || release.size > MAX_ASSET_BYTES {
+    if version_of(&release.version).as_deref() != Some(release.version.as_str()) || !trusted_asset_url(&release.url, &release.version) ||
+        !valid_sha256(&release.sha256) || release.size == 0 || release.size > MAX_ASSET_BYTES {
         return Err("invalid release".into());
     }
     let dest = dir.join(versioned_exe_name(&release.version));
     let part = dir.join(format!("{}.part", versioned_exe_name(&release.version)));
     let started = Instant::now();
+    let deadline = started + DOWNLOAD_DEADLINE;
     logger::info("update download start", json!({"version": release.version, "dest": dest.display().to_string()}));
     let result = (|| -> Result<(), String> {
         let mut file = fs::File::create(&part).map_err(|e| file_error(&e))?;
         let mut written: u64 = 0;
         let mut hash = Sha256::new();
         http_get(&release.url, DOWNLOAD_TIMEOUT, None, &mut |chunk| {
+            if Instant::now() > deadline {
+                return Err(format!("download did not finish within {} minutes", DOWNLOAD_DEADLINE.as_secs() / 60));
+            }
             written += chunk.len() as u64;
             if written > MAX_ASSET_BYTES {
                 return Err("download larger than allowed".into());
@@ -278,6 +292,7 @@ pub fn download(release: &Release, dir: &Path) -> Result<PathBuf, String> {
         })
         .map_err(|e| e.to_string())?;
         file.flush().map_err(|e| file_error(&e))?;
+        file.sync_all().map_err(|e| file_error(&e))?; // on disk before the rename makes it the update
         drop(file);
         if written != release.size {
             return Err(format!("size mismatch: got {written}, expected {}", release.size));
@@ -314,12 +329,17 @@ fn parse_versioned(name: &str) -> Option<(&str, bool)> {
         Some(v) => (v, true),
         None => (rest.strip_suffix(".exe")?, false),
     };
-    let parts: Vec<&str> = ver.split('.').collect();
-    (parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))).then_some((ver, part))
+    is_release_version(ver).then_some((ver, part))
+}
+
+/// True when `path` is known to be unmodified for at least `age` (unknown or future times: false).
+fn unmodified_for(path: &Path, age: Duration) -> bool {
+    fs::metadata(path).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a >= age)
 }
 
 /// Delete older "Crosshair Z <version>.exe" copies and stale ".part" downloads in `dir`.
-/// Never touches the running exe, newer/equal versions or any other file.
+/// Never touches the running exe, newer/equal versions, a `.part` that may still be downloading
+/// or any other file.
 pub fn cleanup_old_versions(dir: &Path, current_version: &str, current_exe: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(dir) else { return Vec::new() };
     let names: Vec<String> = entries.filter_map(Result::ok).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
@@ -331,7 +351,8 @@ pub fn cleanup_old_versions(dir: &Path, current_version: &str, current_exe: &Pat
     for name in names {
         let Some((ver, part)) = parse_versioned(&name) else { continue };
         let file = dir.join(&name);
-        if file.to_string_lossy().to_lowercase() == me || (!part && compare_versions(ver, current_version) >= 0) {
+        let keep = if part { !unmodified_for(&file, DOWNLOAD_TIMEOUT) } else { compare_versions(ver, current_version) >= 0 };
+        if keep || file.to_string_lossy().to_lowercase() == me {
             continue;
         }
         match fs::remove_file(&file) {
@@ -450,6 +471,36 @@ mod tests {
         assert_eq!(file_error(&ordinary), ordinary.to_string());
     }
 
+    /// Backdate the last-write time of `path` by `age`.
+    fn set_age(path: &Path, age: Duration) {
+        let file = fs::OpenOptions::new().write(true).open(path).unwrap();
+        file.set_modified(std::time::SystemTime::now() - age).unwrap();
+    }
+
+    #[test]
+    fn version_needs_three_parts() {
+        assert_eq!(version_of("v2.1"), None);
+        assert_eq!(version_of("v2.0.6").as_deref(), Some("2.0.6"));
+        assert_eq!(version_of(" 2.0.6 ").as_deref(), Some("2.0.6"));
+        assert_eq!(version_of("v2.0.6.1"), None);
+        assert_eq!(version_of("v2..6"), None);
+    }
+
+    #[test]
+    fn cleanup_keeps_fresh_part() {
+        let dir = std::env::temp_dir().join(format!("cz-upd-fresh-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        for n in ["Crosshair Z 2.0.6.exe.part", "Crosshair Z 2.0.7.exe.part"] {
+            fs::write(dir.join(n), b"x").unwrap();
+        }
+        set_age(&dir.join("Crosshair Z 2.0.7.exe.part"), Duration::from_secs(10 * 60));
+        let removed = cleanup_old_versions(&dir, "2.0.5", &dir.join("Crosshair Z 2.0.5.exe"));
+        assert_eq!(removed, vec!["Crosshair Z 2.0.7.exe.part"], "only the abandoned download is removed");
+        assert!(dir.join("Crosshair Z 2.0.6.exe.part").exists(), "a download may still be writing a fresh .part");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn cleanup_removes_only_older_copies() {
         let dir = std::env::temp_dir().join(format!("cz-upd-{}", std::process::id()));
@@ -458,6 +509,7 @@ mod tests {
         for n in ["Crosshair Z 1.8.6.exe", "Crosshair Z 1.8.7.exe", "Crosshair Z 2.0.0.exe", "Crosshair Z 2.1.0.exe", "Crosshair Z 2.1.0.exe.part", "Crosshair-Z.exe", "notes.txt"] {
             fs::write(dir.join(n), b"x").unwrap();
         }
+        set_age(&dir.join("Crosshair Z 2.1.0.exe.part"), Duration::from_secs(10 * 60)); // an abandoned download
         let mut removed = cleanup_old_versions(&dir, "2.0.0", &dir.join("Crosshair Z 2.0.0.exe"));
         removed.sort();
         assert_eq!(removed, vec!["Crosshair Z 1.8.6.exe", "Crosshair Z 1.8.7.exe", "Crosshair Z 2.1.0.exe.part"]);

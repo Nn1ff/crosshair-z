@@ -1,6 +1,7 @@
 //! Renders sprite sets with `crosshair-core.js` in a hidden WebView2 (`native/sprite-render.html`)
 //! that exists only while jobs are queued. Jobs time out after 10 s, are retried once, then fail
-//! (the app shows the fallback crosshair).
+//! (the app shows the fallback crosshair and asks again once `retry_delay` has passed: 60 s after
+//! the first failure, doubling with every further failure in a row up to 15 min).
 
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -18,8 +19,25 @@ pub const WINDOW_LABEL: &str = "sprite-renderer";
 const PAGE: &str = "src/native/sprite-render.html";
 pub const JOB_TIMEOUT: Duration = Duration::from_secs(10);
 pub const MAX_ATTEMPTS: u32 = 2;
+/// A key that failed shows the fallback; it is rendered again on demand after this long.
+pub const FAILED_RETRY_AFTER: Duration = Duration::from_secs(60);
+/// Longest wait between attempts at a key that keeps failing (each attempt starts a WebView2).
+pub const FAILED_RETRY_MAX: Duration = Duration::from_secs(15 * 60);
 const WATCHDOG_EVERY: Duration = Duration::from_secs(1);
 const KEY_HEADER: &str = "x-job-key";
+
+/// Wait before the next attempt at a key that failed `failures` times in a row:
+/// `FAILED_RETRY_AFTER · 2^(failures - 1)`, at most `FAILED_RETRY_MAX`.
+pub fn retry_delay(failures: u32) -> Duration {
+    let doublings = failures.saturating_sub(1).min(16); // 2^16 minutes is far above the cap
+    FAILED_RETRY_AFTER.saturating_mul(1 << doublings).min(FAILED_RETRY_MAX)
+}
+
+/// True once a key that failed `failures` times in a row, the last time at `failed_at`, may be
+/// rendered again.
+pub fn retry_due(failed_at: Instant, failures: u32, now: Instant) -> bool {
+    now.saturating_duration_since(failed_at) >= retry_delay(failures)
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Job {
@@ -332,6 +350,26 @@ mod tests {
         q.take_next(t0);
         assert!(q.expired(t0 + JOB_TIMEOUT - Duration::from_millis(1)).is_empty());
         assert_eq!(q.expired(t0 + JOB_TIMEOUT), vec!["a".to_string()]);
+    }
+
+    #[test]
+    fn retry_after_sixty_seconds() {
+        let t0 = Instant::now();
+        assert!(!retry_due(t0, 1, t0 + Duration::from_secs(59)));
+        assert!(retry_due(t0, 1, t0 + Duration::from_secs(60)));
+        assert!(!retry_due(t0 + Duration::from_secs(1), 1, t0), "clock order never panics");
+    }
+
+    #[test]
+    fn failed_keys_back_off_exponentially() {
+        assert_eq!(retry_delay(1), Duration::from_secs(60), "the first retry stays at a minute");
+        assert_eq!(retry_delay(2), Duration::from_secs(120));
+        assert_eq!(retry_delay(5), Duration::from_secs(15 * 60), "60 s · 16 is above the 15 min cap");
+        assert_eq!(retry_delay(10), Duration::from_secs(15 * 60));
+        assert_eq!(retry_delay(u32::MAX), FAILED_RETRY_MAX, "no overflow");
+        let t0 = Instant::now();
+        assert!(!retry_due(t0, 2, t0 + Duration::from_secs(119)));
+        assert!(retry_due(t0, 2, t0 + Duration::from_secs(120)));
     }
 
     #[test]

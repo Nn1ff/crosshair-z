@@ -21,14 +21,20 @@
     return [...new Set(out)];
   }
 
-  /** Decode images and load fonts before drawing, so no layer is drawn half-ready. */
+  /**
+   * Decode images and load fonts before drawing, so no layer is drawn half-ready. Returns the
+   * decoded images by source: the build keeps them, since the shared image cache may evict a primed
+   * image (count or pixel cap) before its layer is drawn.
+   */
   async function prepareAssets(ch, scale, size) {
+    const decoded = new Map();
     await Promise.all(
       imageSources(ch).map(async (src) => {
         try {
           const img = new Image();
           img.src = src;
           await img.decode();
+          decoded.set(src, img);
           C.primeImage(src, img);
         } catch (err) {
           console.warn('sprite export: image failed to decode', err && err.message);
@@ -39,6 +45,19 @@
     const probe = new OffscreenCanvas(size, size).getContext('2d');
     C.drawCrosshair(probe, ch, size / 2, size / 2, { scale });
     if (typeof document !== 'undefined' && document.fonts) await document.fonts.ready;
+    return decoded;
+  }
+
+  /**
+   * Put the images of `layers` back into the cache right before they are drawn. The entry put last
+   * is never evicted, and a solo layer draws one image, so it is always there; the copy has the
+   * pixels of the first priming, so the output is unchanged.
+   */
+  function primeLayers(layers, decoded) {
+    for (const src of imageSources({ layers })) {
+      const img = decoded.get(src);
+      if (img) C.primeImage(src, img);
+    }
   }
 
   function newContext(size) {
@@ -73,7 +92,7 @@
     return { ...ch, layers: ch.layers.map((l, j) => (j === index ? l : { ...l, visible: false })) };
   }
 
-  async function renderSprites(ch, scale, size, levels) {
+  async function renderSprites(ch, scale, size, levels, decoded) {
     const ctx = newContext(size);
     const layers = [];
     for (let i = 0; i < ch.layers.length; i++) {
@@ -83,6 +102,10 @@
       const n = fire ? levels : 1;
       const only = solo(ch, i);
       const frames = [];
+      // earlier layers' svg rasters may have pushed this layer's image out of the cache. Its own
+      // frames add nothing to the cache and never wait on a decode (an image or drawing layer has
+      // no svg to prepare), so once primed here it stays until they are all drawn.
+      primeLayers([layer], decoded);
       for (let k = 0; k < n; k++) {
         const fireLevels = [];
         fireLevels[i] = fire ? k / (n - 1) : 0;
@@ -104,11 +127,11 @@
   async function buildSpriteSet(raw, scale) {
     const ch = C.sanitizeCrosshair(raw);
     const size = C.overlaySizePx(ch, scale);
-    await prepareAssets(ch, scale, size);
-    const bytes = await renderSprites(ch, scale, size, LEVELS);
+    const decoded = await prepareAssets(ch, scale, size); // held for the whole build
+    const bytes = await renderSprites(ch, scale, size, LEVELS, decoded);
     if (bytes.length <= MAX_SET_BYTES) return bytes;
     console.warn('sprite set too large, using fewer firing levels', { bytes: bytes.length });
-    return renderSprites(ch, scale, size, REDUCED_LEVELS);
+    return renderSprites(ch, scale, size, REDUCED_LEVELS, decoded);
   }
 
   /**
@@ -118,10 +141,13 @@
   async function renderReference(raw, scale, level) {
     const ch = C.sanitizeCrosshair(raw);
     const size = C.overlaySizePx(ch, scale);
-    await prepareAssets(ch, scale, size);
+    const decoded = await prepareAssets(ch, scale, size);
     const ctx = newContext(size);
     const fireLevels = ch.layers.map((l) => (l.firing && l.firing.enabled ? level : 0));
     await C.prepareCrosshair(ch, { scale, fire: fireLevels });
+    // one draw needs every image at once: all are back in the cache unless together they exceed
+    // its pixel budget (the last one primed always stays)
+    primeLayers(ch.layers.filter((l) => l.visible), decoded);
     C.drawCrosshair(ctx, ch, size / 2, size / 2, { scale, fire: fireLevels });
     return { size, bgra: F.rgbaToBgraPremul(ctx.getImageData(0, 0, size, size).data) };
   }

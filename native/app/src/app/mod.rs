@@ -1,16 +1,16 @@
 //! The app thread: the single owner of config, runtime state, sprite cache and the overlay.
 //! Every input (hotkey, mouse, tray, renderer, display change) arrives as an `AppEvent`.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 mod ipc;
 mod settings;
 mod updates;
 
 pub use updates::integrates_with_system;
 
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
@@ -25,7 +25,7 @@ use crate::overlay::Overlay;
 use crate::paths;
 use crate::sprites::cache::{cache_key, SpriteCache};
 use crate::sprites::codec::SpriteSet;
-use crate::sprites::renderer::{Job, RenderEvent, SpriteRenderer};
+use crate::sprites::renderer::{retry_delay, retry_due, Job, RenderEvent, SpriteRenderer};
 use crate::state::{self, Buttons, Runtime};
 use crate::tray::Tray;
 
@@ -43,8 +43,9 @@ pub enum AppEvent {
     CheckUpdates,
     Housekeeping,
     Update(updates::UpdateEvent),
-    /// another start of the exe; reply true = hand over and quit
-    SecondInstance { hello: crate::instance::Hello, reply: Sender<bool> },
+    /// another start of the exe; reply true = hand over and quit (rendezvous channel: the send
+    /// succeeds only while the pipe thread still waits)
+    SecondInstance { hello: crate::instance::Hello, reply: SyncSender<bool> },
     /// user closed the settings window: let the page flush first
     SettingsCloseRequested,
     /// the page did not answer the close request in time
@@ -72,6 +73,13 @@ pub async fn cz_invoke(channel: String, payload: Value, bridge: State<'_, IpcBri
 
 const PROFILE_HOTKEY_PREFIX: &str = "profile:";
 
+/// Answer a second instance over the rendezvous channel. True only when its pipe thread took the
+/// reply: after its timeout it already answered "stay" (the new process exits), so this one must
+/// not quit.
+fn deliver_handover(reply: &SyncSender<bool>, handover: bool) -> bool {
+    reply.send(handover).is_ok()
+}
+
 /// Everything the tray menu shows.
 fn tray_signature(c: &crate::config::Config) -> String {
     let names: Vec<&str> = c.profiles.iter().map(|p| p.name.as_str()).collect();
@@ -92,8 +100,9 @@ pub struct App {
     renderer: Arc<SpriteRenderer>,
     tray: Option<Tray>,
     monitors: Vec<Monitor>,
-    /// keys whose rendering gave up: show the fallback instead of retrying forever
-    failed: HashSet<String>,
+    /// keys whose rendering gave up: when it last failed and how many times in a row; they show
+    /// the fallback until a retry is due (`retry_delay` grows with the count)
+    failed: HashMap<String, (Instant, u32)>,
     fallback: Arc<SpriteSet>,
     /// what the tray menu currently shows; rebuilt only when this changes (not on every right-click)
     tray_sig: String,
@@ -135,7 +144,7 @@ impl App {
             renderer,
             tray: None,
             monitors: monitors::list(),
-            failed: HashSet::new(),
+            failed: HashMap::new(),
             fallback: Arc::new(SpriteSet::fallback()),
             tray_sig: String::new(),
             hotkeys_suspended: false,
@@ -201,13 +210,13 @@ impl App {
                 }
                 Err(err) => {
                     logger::error("rendered sprites invalid", json!({"error": err.to_string()}));
-                    self.failed.insert(key);
+                    self.render_failed(key);
                     self.apply();
                 }
             },
             AppEvent::Render(RenderEvent::Failed { key, error }) => {
                 logger::error("crosshair could not be rendered, showing fallback", json!({"error": error}));
-                self.failed.insert(key);
+                self.render_failed(key);
                 self.apply();
             }
             AppEvent::Ipc { channel, payload, reply } => {
@@ -224,9 +233,12 @@ impl App {
             AppEvent::Update(ev) => self.on_update_event(ev),
             AppEvent::SecondInstance { hello, reply } => {
                 let handover = self.on_second_instance(&hello);
-                let _ = reply.send(handover);
+                let delivered = deliver_handover(&reply, handover);
                 if handover {
-                    return false;
+                    if delivered {
+                        return false;
+                    }
+                    logger::warn("handover reply came too late; the new instance was told to exit, keeping this one", json!({"version": hello.version}));
                 }
             }
             AppEvent::SettingsCloseRequested => self.request_close_settings(),
@@ -241,6 +253,9 @@ impl App {
                 self.monitors = monitors::list();
                 logger::info("displays changed", json!({"count": self.monitors.len()}));
                 self.apply();
+                // Windows may have moved the window while the computed place stayed the same:
+                // a frame re-places it (apply() alone draws nothing for an unchanged scene)
+                self.overlay.refresh();
             }
         }
         true
@@ -265,13 +280,8 @@ impl App {
         let rt = &mut self.rt;
         match key {
             "toggle" => {
-                let mut next = self.store.get().clone();
-                let changed = state::keyboard_toggle(&mut next, rt);
-                if changed {
-                    self.store.set(next); // switch-mode toggles only change runtime state
-                }
-                logger::info("keyboard toggle", json!({"enabled": self.store.get().enabled, "alt": self.rt.kb_alt, "saved": changed}));
-                self.emit("runtime:changed", self.runtime_value());
+                self.keyboard_toggle();
+                return;
             }
             "next" => {
                 self.store.update(|c| state::cycle_profile(c, rt, 1));
@@ -294,19 +304,32 @@ impl App {
         self.changed();
     }
 
+    /// Show/hide hotkey: the overlay changes first, the log line follows.
+    fn keyboard_toggle(&mut self) {
+        let mut next = self.store.get().clone();
+        let saved = state::keyboard_toggle(&mut next, &mut self.rt);
+        if saved {
+            self.store.set(next); // switch-mode toggles only change runtime state
+        }
+        self.changed();
+        self.emit_with("runtime:changed", || self.runtime_value());
+        logger::info("keyboard toggle", json!({"enabled": self.store.get().enabled, "alt": self.rt.kb_alt, "saved": saved}));
+    }
+
     /// After any config change (main.js `broadcast`).
     fn changed(&mut self) {
         self.apply();
         self.prewarm();
-        self.emit("config:changed", self.store.get().to_value());
+        self.emit_with("config:changed", || self.store.get().to_value());
     }
 
-    /// Push an event to the settings page (if open).
-    fn emit(&self, event: &str, payload: Value) {
-        if self.settings_open {
-            if let Err(err) = self.handle.emit_to(settings::LABEL, event, payload) {
-                logger::warn("emit to settings failed", json!({"event": event, "error": err.to_string()}));
-            }
+    /// Push an event to the settings page (if open); the payload is built only then.
+    fn emit_with(&self, event: &str, payload: impl FnOnce() -> Value) {
+        if !self.settings_open {
+            return;
+        }
+        if let Err(err) = self.handle.emit_to(settings::LABEL, event, payload()) {
+            logger::warn("emit to settings failed", json!({"event": event, "error": err.to_string()}));
         }
     }
 
@@ -324,7 +347,7 @@ impl App {
         if !problems.is_empty() {
             logger::warn("some hotkeys not registered", json!({"problems": problems}));
         }
-        self.emit("hotkeys:status", self.hotkey_status_value());
+        self.emit_with("hotkeys:status", || self.hotkey_status_value());
     }
 
     fn sprites_for(&mut self, crosshair: &serde_json::Value, scale: f64) -> Option<Arc<SpriteSet>> {
@@ -332,11 +355,23 @@ impl App {
         if let Some(set) = self.cache.get(&key) {
             return Some(set);
         }
-        if self.failed.contains(&key) {
+        if let Some(&(failed_at, failures)) = self.failed.get(&key) {
+            if retry_due(failed_at, failures, Instant::now()) {
+                // the fallback stays until the new attempt succeeds; a new failure waits longer
+                self.renderer.request(Job { key, crosshair: crosshair.clone(), scale });
+            }
             return Some(self.fallback.clone());
         }
         self.renderer.request(Job { key, crosshair: crosshair.clone(), scale });
         None
+    }
+
+    /// Rendering `key` gave up: count the failure in a row (a success clears it). No timer: the key
+    /// is requested again only when it is needed after the wait.
+    fn render_failed(&mut self, key: String) {
+        let failures = self.failed.get(&key).map_or(1, |&(_, n)| n.saturating_add(1));
+        logger::info("sprite render gave up, next attempt on demand after a wait", json!({"key": &key[..12.min(key.len())], "failures": failures, "waitS": retry_delay(failures).as_secs()}));
+        self.failed.insert(key, (Instant::now(), failures));
     }
 
     /// Show what the config + runtime say (main.js `layoutOverlay` + tray + mouse polling).
@@ -373,7 +408,7 @@ impl App {
     }
 
     fn update_mouse_polling(&mut self, c: &crate::config::Config) {
-        let need = state::needs_mouse(c);
+        let need = state::needs_mouse(c, &self.rt);
         match (need, self.mouse.is_some()) {
             (true, false) => {
                 let tx = self.events.clone();
@@ -404,5 +439,22 @@ impl App {
             }
         }
         self.cache.retain_mem(&keep);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn handover_needs_a_listening_receiver() {
+        let (tx, rx) = mpsc::sync_channel::<bool>(0);
+        drop(rx);
+        assert!(!deliver_handover(&tx, true), "the second instance stopped waiting: stay");
+
+        let (tx, rx) = mpsc::sync_channel::<bool>(0);
+        let waiter = std::thread::spawn(move || rx.recv_timeout(Duration::from_secs(5)));
+        assert!(deliver_handover(&tx, true), "taken by the waiting pipe thread");
+        assert_eq!(waiter.join().unwrap(), Ok(true));
     }
 }

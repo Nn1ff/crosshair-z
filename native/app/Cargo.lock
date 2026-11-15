@@ -436,6 +436,7 @@ dependencies = [
  "sha2",
  "tauri",
  "tauri-build",
+ "tokio",
  "uuid",
  "windows 0.61.3",
 ]

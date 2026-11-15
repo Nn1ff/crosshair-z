@@ -149,6 +149,11 @@ impl SpriteSet {
         Ok(SpriteSet { size_px, layers })
     }
 
+    /// True when a layer animates while firing.
+    pub fn has_firing(&self) -> bool {
+        self.layers.iter().any(|l| l.fire_speed_ms.is_some())
+    }
+
     pub fn encode(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(HEADER_BYTES + self.layers.iter().map(|l| LAYER_HEADER_BYTES + l.frames.iter().map(|f| FRAME_HEADER_BYTES + f.px.len() * 4).sum::<usize>()).sum::<usize>());
         out.extend_from_slice(MAGIC);
@@ -304,6 +309,13 @@ mod tests {
     #[test]
     fn huge_input_rejected_before_parsing() {
         assert_eq!(SpriteSet::decode(&vec![0u8; MAX_BYTES + 1]), Err(SpriteError::TooLarge(MAX_BYTES + 1)));
+    }
+
+    #[test]
+    fn has_firing_needs_a_fire_layer() {
+        assert!(shared().has_firing());
+        assert!(!SpriteSet::fallback().has_firing());
+        assert!(!SpriteSet { size_px: 1, layers: vec![] }.has_firing());
     }
 
     #[test]

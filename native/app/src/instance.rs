@@ -8,10 +8,14 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use windows::core::HSTRING;
-use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, ERROR_PIPE_CONNECTED, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE};
+use windows::core::{HRESULT, HSTRING};
+use windows::Win32::Foundation::{
+    CloseHandle, GetLastError, E_ACCESSDENIED, ERROR_ALREADY_EXISTS, ERROR_PIPE_CONNECTED, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
+};
 use windows::Win32::Storage::FileSystem::{CreateFileW, FlushFileBuffers, ReadFile, WriteFile, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_NONE, OPEN_EXISTING, PIPE_ACCESS_DUPLEX};
-use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
+use windows::Win32::System::Pipes::{
+    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_MESSAGE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_MESSAGE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
+};
 use windows::Win32::System::Threading::CreateMutexW;
 
 use crate::logger;
@@ -22,6 +26,9 @@ const REPLY_HANDOVER: &[u8] = b"handover";
 const REPLY_STAY: &[u8] = b"stay";
 const TAKEOVER_TIMEOUT: Duration = Duration::from_secs(15);
 const TAKEOVER_POLL: Duration = Duration::from_millis(200);
+/// Wait after the first failed pipe creation; doubles per failure up to `PIPE_RETRY_MAX`.
+const PIPE_RETRY_FIRST: Duration = Duration::from_secs(1);
+const PIPE_RETRY_MAX: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hello {
@@ -74,6 +81,17 @@ impl Drop for InstanceGuard {
     }
 }
 
+/// A `CreateMutexW` failure that still proves another instance exists: access denied means the
+/// mutex is there but was created with other rights (an elevated instance, for example).
+fn mutex_error_means_running(code: HRESULT) -> bool {
+    code == E_ACCESSDENIED
+}
+
+/// Wait before creating the instance pipe again after `attempt` failures in a row.
+fn pipe_retry_delay(attempt: u32) -> Duration {
+    PIPE_RETRY_FIRST.saturating_mul(2u32.saturating_pow(attempt)).min(PIPE_RETRY_MAX)
+}
+
 /// `None` when another instance already holds the mutex.
 pub fn acquire() -> Option<InstanceGuard> {
     unsafe {
@@ -85,6 +103,10 @@ pub fn acquire() -> Option<InstanceGuard> {
                 } else {
                     Some(InstanceGuard(h))
                 }
+            }
+            Err(err) if mutex_error_means_running(err.code()) => {
+                logger::info("single-instance mutex not accessible, another instance is running", json!({"error": err.to_string()}));
+                None
             }
             Err(err) => {
                 // Without a mutex we cannot tell; running is better than refusing to start.
@@ -139,11 +161,12 @@ pub fn notify_running(hello: &Hello) -> bool {
 /// hand over (this instance will quit).
 pub fn listen(on_hello: Box<dyn Fn(Hello) -> bool + Send>) {
     let spawned = std::thread::Builder::new().name("instance-pipe".into()).spawn(move || unsafe {
+        let mut failures: u32 = 0;
         loop {
             let pipe = CreateNamedPipeW(
                 &HSTRING::from(pipe_name()),
                 PIPE_ACCESS_DUPLEX,
-                PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+                PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
                 PIPE_UNLIMITED_INSTANCES,
                 PIPE_BUFFER,
                 PIPE_BUFFER,
@@ -151,8 +174,17 @@ pub fn listen(on_hello: Box<dyn Fn(Hello) -> bool + Send>) {
                 None,
             );
             if pipe == INVALID_HANDLE_VALUE {
-                logger::error("instance pipe unavailable, second starts cannot hand over", json!({"error": windows::core::Error::from_win32().to_string()}));
-                return;
+                if failures == 0 {
+                    let error = windows::core::Error::from_win32().to_string();
+                    logger::error("instance pipe unavailable, retrying; second starts cannot hand over meanwhile", json!({"error": error}));
+                }
+                std::thread::sleep(pipe_retry_delay(failures));
+                failures = failures.saturating_add(1);
+                continue;
+            }
+            if failures > 0 {
+                logger::info("instance pipe available again", json!({"failedAttempts": failures}));
+                failures = 0;
             }
             let connected = ConnectNamedPipe(pipe, None).is_ok() || GetLastError() == ERROR_PIPE_CONNECTED;
             if connected {
@@ -202,6 +234,20 @@ mod tests {
         assert_ne!(normal, first);
         assert_ne!(first, second);
         assert_eq!(first, instance_suffix("User", Some("C:/isolated-a")));
+    }
+
+    #[test]
+    fn access_denied_mutex_counts_as_running() {
+        use windows::Win32::Foundation::E_FAIL;
+        assert!(mutex_error_means_running(E_ACCESSDENIED), "a mutex we may not open belongs to a running instance");
+        assert!(!mutex_error_means_running(E_FAIL));
+    }
+
+    #[test]
+    fn pipe_retry_backoff() {
+        let secs: Vec<u64> = [0, 1, 5, 6, 20].into_iter().map(|attempt| pipe_retry_delay(attempt).as_secs()).collect();
+        assert_eq!(secs, [1, 2, 32, 60, 60]);
+        assert_eq!(pipe_retry_delay(u32::MAX), Duration::from_secs(60));
     }
 
     #[test]

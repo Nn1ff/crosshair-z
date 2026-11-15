@@ -8,6 +8,7 @@
 (function () {
   const C = CrosshairCore;
   const { el, icon, getPath, setPath, toast, clone } = CZUI;
+  const { nextZoom, dragDelta } = CzInput;
 
   const ZOOM_MIN = 2;
   const ZOOM_MAX = 40;
@@ -197,6 +198,7 @@
     const ctx = canvas.getContext('2d');
     const st = {
       draft: null,
+      profileId: undefined, // saved crosshair being edited; the undo history belongs to it
       sel: 0,
       tab: 'design',
       zoom: ZOOM_DEFAULT,
@@ -232,12 +234,29 @@
 
     function scheduleSnapshot() {
       clearTimeout(st.hTimer);
-      st.hTimer = setTimeout(snapshot, HISTORY_DEBOUNCE_MS);
+      st.hTimer = setTimeout(() => {
+        st.hTimer = null;
+        snapshot();
+        syncHistoryButtons();
+      }, HISTORY_DEBOUNCE_MS);
+      syncHistoryButtons(); // an edit waiting for its snapshot can already be undone
+    }
+
+    function cancelSnapshot() {
+      clearTimeout(st.hTimer);
+      st.hTimer = null;
+    }
+
+    /** Record a pending (debounced) edit now, so undo/redo never skip or lose it. */
+    function flushSnapshot() {
+      if (!st.hTimer) return;
+      cancelSnapshot();
+      snapshot();
     }
 
     function restore(i) {
-      clearTimeout(st.hTimer);
-      if (i < 0 || i >= st.history.length) return;
+      cancelSnapshot();
+      if (i < 0 || i >= st.history.length) return syncHistoryButtons();
       st.hIdx = i;
       const { d, s } = JSON.parse(st.history[i]);
       st.draft = C.sanitizeCrosshair(d);
@@ -246,9 +265,20 @@
       syncHistoryButtons();
     }
 
+    function undo() {
+      flushSnapshot();
+      restore(st.hIdx - 1);
+    }
+
+    function redo() {
+      flushSnapshot();
+      restore(st.hIdx + 1);
+    }
+
     function syncHistoryButtons() {
-      $('dzUndo').disabled = st.hIdx <= 0;
-      $('dzRedo').disabled = st.hIdx >= st.history.length - 1;
+      const pending = !!st.hTimer;
+      $('dzUndo').disabled = st.hIdx <= 0 && !pending;
+      $('dzRedo').disabled = pending || st.hIdx >= st.history.length - 1;
     }
 
     // ---------- change pipeline ----------
@@ -499,7 +529,7 @@
     function wireCanvas() {
       canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
-        setZoom(st.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+        if (e.deltaY) setZoom(nextZoom(st.zoom, e.deltaY < 0, ZOOM_MIN, ZOOM_MAX)); // sideways scroll: no zoom
       }, { passive: false });
       canvas.addEventListener('pointerdown', (e) => {
         canvas.setPointerCapture(e.pointerId);
@@ -514,8 +544,10 @@
       canvas.addEventListener('pointermove', (e) => {
         if (st.paint) return paintAt(e);
         if (!st.drag) return;
-        const dx = Math.round((e.clientX - st.drag.x) / st.zoom);
-        const dy = Math.round((e.clientY - st.drag.y) / st.zoom);
+        // offsets are drawn at the display scale, so the layer follows the pointer at any scale
+        const scale = opts.getScale();
+        const dx = dragDelta(e.clientX - st.drag.x, st.zoom, scale);
+        const dy = dragDelta(e.clientY - st.drag.y, st.zoom, scale);
         const l = layer();
         if (l.offsetX === st.drag.ox + dx && l.offsetY === st.drag.oy + dy) return;
         l.offsetX = st.drag.ox + dx;
@@ -534,16 +566,22 @@
 
     // ---------- drawing layers ----------
 
-    /** Editable DRAW_SIZE² bitmap of the selected drawing layer (re-decoded when its data URL changes). */
+    /**
+     * Editable DRAW_SIZE² bitmap of the selected drawing layer (re-decoded when its data URL changes).
+     * Imported drawings of another size are scaled to DRAW_SIZE² without smoothing, as they render.
+     */
     function drawBitmap(l) {
       if (st.drawBuf && st.drawBuf.src === l.draw.src) return st.drawBuf.canvas;
       const c = new OffscreenCanvas(C.DRAW_SIZE, C.DRAW_SIZE);
-      st.drawBuf = { src: l.draw.src, canvas: c, ready: !l.draw.src };
+      const buf = { src: l.draw.src, canvas: c, ready: !l.draw.src };
+      st.drawBuf = buf;
       if (l.draw.src) {
         const img = new Image();
         img.onload = () => {
-          c.getContext('2d').drawImage(img, 0, 0);
-          st.drawBuf.ready = true;
+          const b = c.getContext('2d');
+          b.imageSmoothingEnabled = false;
+          b.drawImage(img, 0, 0, C.DRAW_SIZE, C.DRAW_SIZE);
+          buf.ready = true; // this buffer, even if another drawing was selected meanwhile
         };
         img.onerror = () => console.warn('drawing could not be decoded');
         img.src = l.draw.src;
@@ -1006,8 +1044,8 @@
     }
 
     function wireToolbar() {
-      $('dzUndo').addEventListener('click', () => restore(st.hIdx - 1));
-      $('dzRedo').addEventListener('click', () => restore(st.hIdx + 1));
+      $('dzUndo').addEventListener('click', undo);
+      $('dzRedo').addEventListener('click', redo);
       $('dzDupLayer').addEventListener('click', () => addLayer(clone(layer())));
       $('dzDelLayer').addEventListener('click', deleteLayer);
       $('dzLayerUp').addEventListener('click', () => moveLayer(-1));
@@ -1052,8 +1090,8 @@
       }
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (e.ctrlKey && k === 'z' && !e.shiftKey) restore(st.hIdx - 1);
-      else if (e.ctrlKey && (k === 'y' || (k === 'z' && e.shiftKey))) restore(st.hIdx + 1);
+      if (e.ctrlKey && k === 'z' && !e.shiftKey) undo();
+      else if (e.ctrlKey && (k === 'y' || (k === 'z' && e.shiftKey))) redo();
       else if (e.ctrlKey && k === 'd') addLayer(clone(layer()));
       else if (k === 'delete') deleteLayer();
       else if (!e.ctrlKey && k === '0') fitView();
@@ -1079,14 +1117,17 @@
     // ---------- public ----------
 
     /**
-     * Load crosshair into designer. resetHistory when switching crosshair.
+     * Load crosshair into designer. The undo history starts over only when `profileId` differs from
+     * the loaded one (reloading the same saved crosshair after a save, import or dedupe keeps it).
      * @param {object} crosshair
      * @param {string} name
-     * @param {boolean} resetHistory
+     * @param {string} profileId
      */
-    function load(crosshair, name, resetHistory) {
+    function load(crosshair, name, profileId) {
       st.draft = C.sanitizeCrosshair(clone(crosshair));
-      if (resetHistory) {
+      if (profileId !== st.profileId) {
+        st.profileId = profileId;
+        cancelSnapshot(); // a pending edit belongs to the previous crosshair's history
         st.sel = 0;
         st.history = [];
         st.hIdx = -1;

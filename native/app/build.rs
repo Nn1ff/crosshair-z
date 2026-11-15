@@ -1,12 +1,19 @@
 //! Stages the web files the native app embeds into `dist/` (frontendDist), keeping the repo layout
 //! so relative paths in the shared pages (`../shared/…`, `../../assets/icon.png`) keep working.
 //! Only these folders are embedded — development scripts and tests stay outside the app.
+//! Also hardens how the exe's own DLL imports are loaded (MSVC linker).
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 const WEB_DIRS: [&str; 3] = ["src/renderer", "src/shared", "src/native"];
 const WEB_FILES: [&str; 1] = ["assets/icon.png"];
+/// LOAD_LIBRARY_SEARCH_SYSTEM32 for the exe's imports: a DLL planted next to the exe (e.g. in
+/// Downloads) is never loaded instead of the system one. Safe only because tauri-build links the
+/// VC runtime statically by default (the exe imports no vcruntime140.dll): switching to the
+/// dynamic CRT (`build > windows > staticVCRuntime: false`, DLLs shipped next to the exe) requires
+/// dropping this flag, or the exe fails to start on machines without the VC++ redistributable.
+const DEPENDENT_LOAD_FLAG: &str = "/DEPENDENTLOADFLAG:0x800";
 
 fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
@@ -36,6 +43,9 @@ fn main() {
         fs::create_dir_all(to.parent().unwrap()).expect("create dist dir");
         fs::copy(repo.join(file), &to).unwrap_or_else(|e| panic!("staging {file}: {e}"));
         println!("cargo:rerun-if-changed=../../{file}");
+    }
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        println!("cargo:rustc-link-arg-bins={DEPENDENT_LOAD_FLAG}");
     }
     tauri_build::build()
 }

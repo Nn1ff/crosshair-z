@@ -4,6 +4,7 @@
 (function () {
   const C = CrosshairCore;
   const { el, icon, toast, call } = CZUI;
+  const { toAccelerator } = CzInput;
   const PUSH_DEBOUNCE_MS = 40;
   // Card preview buffer in device pixels; drawn 1:1 like in-game (no upscaling).
   const CARD_W = 128;
@@ -64,11 +65,21 @@
     recording: null, // {kind:'global'|'profile', key}
     designer: null,
     cx: null, // last Crosshair X scan result
+    // card lists whose last render drew an image or font that was still loading: only these are
+    // drawn again when assets finish loading
+    incomplete: { saved: false, library: false, cx: false },
   };
 
   function activeProfile() {
     const c = ui.config;
     return c.profiles.find((p) => p.id === c.activeProfileId) || c.profiles[0];
+  }
+
+  /** Run `draw` and report whether it drew an image or font that is still loading. */
+  function missesAssets(draw) {
+    const before = C.imageCacheMisses();
+    draw();
+    return C.imageCacheMisses() !== before;
   }
 
   // ---------- thumbnails ----------
@@ -131,7 +142,9 @@
   function savedCard(p) {
     const active = p.id === ui.config.activeProfileId;
     const sc = p.hotkey ? el('div', { class: 'shortcut' }, prettyAccel(p.hotkey)) : null;
-    const li = card(p.id === ui.draftId ? ui.draft : p.crosshair, p.name, active ? 'equipped' : '', active, sc, {
+    // saved data may predate the current schema or be damaged: draw what the overlay would show
+    const ch = p.id === ui.draftId ? ui.draft : C.sanitizeCrosshair(p.crosshair);
+    const li = card(ch, p.name, active ? 'equipped' : '', active, sc, {
       marked: true,
       onMark: () => {},
       onUnmark: () => unsaveOne(p),
@@ -186,10 +199,12 @@
 
   /** Saved page grid + the "Your crosshairs" strip on Discover. */
   function renderProfiles() {
-    $('profileList').replaceChildren(...ui.config.profiles.map(savedCard));
-    $('savedStrip').replaceChildren(...ui.config.profiles.map(savedCard));
-    $('activeName').textContent = activeProfile().name;
-    drawThumb($('currentThumb'), ui.draft || activeProfile().crosshair, 44, 44);
+    ui.incomplete.saved = missesAssets(() => {
+      $('profileList').replaceChildren(...ui.config.profiles.map(savedCard));
+      $('savedStrip').replaceChildren(...ui.config.profiles.map(savedCard));
+      $('activeName').textContent = activeProfile().name;
+      drawThumb($('currentThumb'), ui.draft || C.sanitizeCrosshair(activeProfile().crosshair), 44, 44);
+    });
   }
 
   /**
@@ -227,7 +242,7 @@
       : 'No crosshairs yet. Save some in Crosshair X, or make one with New crosshair under Saved.';
     $('libraryEmpty').classList.toggle('hidden', shown.length > 0);
     const prints = savedPrints();
-    $('presetList').replaceChildren(...shown.map((p) => {
+    ui.incomplete.library = missesAssets(() => $('presetList').replaceChildren(...shown.map((p) => {
       const marked = prints.has(JSON.stringify(p.crosshair));
       const li = card(p.crosshair, p.name, ui.category === 'All' ? p.category : '', false, null, {
         marked,
@@ -236,7 +251,7 @@
       });
       li.addEventListener('click', () => createProfile(p.name, p.crosshair, true));
       return li;
-    }));
+    })));
   }
 
   /** Add to Saved without equipping. */
@@ -292,15 +307,21 @@
     }
   }
 
-  /** Create + equip. dedupe=true reuses an identical saved crosshair (library clicks). */
+  /**
+   * Create + equip. dedupe=true reuses an identical saved crosshair (library and Discover clicks).
+   * @returns {Promise<object|null>} the IPC result, null when it failed (already toasted)
+   */
   async function createProfile(name, crosshair, dedupe = false) {
     flushPush();
     const res = await call('profile:create', { name, crosshair, dedupe });
     if (res) {
       applyConfig(res.config, true);
       CZSfx.play('click');
-      toast(`Equipped "${name}"`);
+      // with dedupe an existing (maybe renamed) profile is equipped: name the one actually shown
+      const equipped = ui.config.profiles.find((p) => p.id === res.id) || activeProfile();
+      toast(`Equipped "${equipped.name}"`);
     }
+    return res;
   }
 
   async function moveProfile(dir) {
@@ -325,9 +346,12 @@
     ui.designer.setStatus('saving');
     schedulePush();
     updateShare();
-    const li = $('profileList').querySelector('li.active canvas');
-    if (li) drawCardThumb(li, ui.draft);
-    drawThumb($('currentThumb'), ui.draft, 44, 44);
+    const missed = missesAssets(() => {
+      const li = $('profileList').querySelector('li.active canvas');
+      if (li) drawCardThumb(li, ui.draft);
+      drawThumb($('currentThumb'), ui.draft, 44, 44);
+    });
+    if (missed) ui.incomplete.saved = true; // the rest of the list keeps its own state
   }
 
   function schedulePush() {
@@ -351,39 +375,61 @@
     if (cfg) applyConfig(cfg, false);
   }
 
+  /** Copy the equipped crosshair's share code (designer button and Share page). */
   async function copyShareCode() {
+    let code;
     try {
-      const code = C.encodeShareCode(ui.draft);
-      if ((await call('clipboard:write', code)) !== null) {
-        toast(C.hasImageLayers(ui.draft) ? 'Code copied (image layers skipped)' : 'Share code copied');
-      }
+      code = C.encodeShareCode(ui.draft);
     } catch (err) {
-      toast(err.message, true);
+      toast(err.message, true); // e.g. image-only crosshairs cannot be shared
+      return;
+    }
+    // clipboard:write answers true; failures already toasted by call()
+    if ((await call('clipboard:write', code)) === true) {
+      toast(C.hasImageLayers(ui.draft) ? 'Code copied (image layers skipped)' : 'Share code copied');
     }
   }
 
   // ---------- position ----------
 
-  /** Slider + number box bound to getter/setter. */
+  /**
+   * Slider + number box bound to getter/setter. While the user holds or focuses the slider, config
+   * updates (answers to its own earlier input events) do not move it back under the pointer.
+   */
   function sliderRow(label, spec, step, get, set) {
     const range = el('input', { type: 'range', min: spec.min, max: spec.max, step });
     const num = el('input', { type: 'number', min: spec.min, max: spec.max, step });
+    let held = false; // pointer down on the slider (released anywhere, so listen on window)
     const commit = (v) => {
       const n = Number(v);
       if (v !== '' && Number.isFinite(n)) set(n);
     };
     // --p drives the filled part of the track (CSS gradient)
     const paint = () => range.style.setProperty('--p', `${((range.value - spec.min) / (spec.max - spec.min)) * 100}%`);
+    const showValue = () => {
+      range.value = get();
+      paint();
+    };
     range.addEventListener('input', () => {
       paint();
       commit(range.value);
     });
+    range.addEventListener('pointerdown', () => {
+      held = true;
+    });
+    const release = () => {
+      held = false;
+    };
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', release, true);
+    window.addEventListener('blur', release); // window lost focus mid-drag: no pointerup follows
+    range.addEventListener('blur', showValue); // catch up with changes made while it had focus
     num.addEventListener('change', () => commit(num.value));
     ui.syncers.push(() => {
-      const v = get();
-      range.value = v;
-      paint();
-      if (document.activeElement !== num) num.value = v;
+      // keyboard use needs focus in a focused window; changes made while the user is in game still show
+      const editing = held || (document.activeElement === range && document.hasFocus());
+      if (!editing) showValue();
+      if (document.activeElement !== num) num.value = get();
     });
     return el('div', { class: 'ctrl' }, el('label', null, label), range, num);
   }
@@ -438,6 +484,11 @@
     error: (u) => u.error || 'Update failed.',
   };
 
+  /** Persistent warning while the app runs read-only: its saved library could not be read. */
+  function renderReadOnly() {
+    $('readOnlyWarn').classList.toggle('hidden', !(ui.runtime && ui.runtime.readOnly === true));
+  }
+
   /** Header version ("1.8") from the running app, so it never goes stale. */
   function renderVersion() {
     const v = ui.runtime && ui.runtime.update && ui.runtime.update.current;
@@ -472,28 +523,6 @@
   }
 
   // ---------- hotkeys ----------
-
-  const MOD_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta']);
-  const KEY_MAP = {
-    ' ': 'Space', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
-    '+': 'Plus', Escape: 'Esc', Enter: 'Return',
-  };
-
-  /** KeyboardEvent → Electron accelerator, or null if only modifiers. */
-  function toAccelerator(e) {
-    if (MOD_KEYS.has(e.key)) return null;
-    let key;
-    if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
-    else if (/^Digit[0-9]$/.test(e.code)) key = e.code.slice(5);
-    else if (/^Numpad[0-9]$/.test(e.code)) key = 'num' + e.code.slice(6);
-    else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(e.key)) key = e.key;
-    else key = KEY_MAP[e.key] || (e.key.length === 1 ? e.key.toUpperCase() : e.key);
-    const mods = [];
-    if (e.ctrlKey) mods.push('CommandOrControl');
-    if (e.altKey) mods.push('Alt');
-    if (e.shiftKey) mods.push('Shift');
-    return [...mods, key].join('+');
-  }
 
   function prettyAccel(a) {
     return a ? a.replace('CommandOrControl', 'Ctrl').replace(/\+/g, ' + ') : '— none —';
@@ -562,6 +591,7 @@
     $('shareImageWarn').classList.toggle('hidden', !C.hasImageLayers(ui.draft));
   }
 
+  /** Import the pasted code; the field keeps its text unless the crosshair was saved. */
   async function importCode() {
     let ch;
     try {
@@ -570,8 +600,7 @@
       toast(err.message, true);
       return;
     }
-    await createProfile('Imported', ch);
-    $('importCode').value = '';
+    if (await createProfile('Imported', ch)) $('importCode').value = '';
   }
 
   // ---------- Crosshair X import ----------
@@ -579,18 +608,23 @@
   function renderImport(res) {
     ui.cx = res;
     renderPresets();
-    const list = $('cxList');
     const n = res.items.length;
     $('cxStatus').textContent = n
       ? `Found ${n} crosshair${n === 1 ? '' : 's'}${res.errors.length ? ` (${res.errors.length} could not be read)` : ''}. They also appear in the library under ${CX_COLLECTION}.`
       : res.exists === false ? 'Crosshair X is not installed for this Windows user. Use Import file to pick a crosshair .json.' : 'Crosshair X has no saved crosshairs yet.';
     $('cxImportAll').disabled = n === 0;
-    list.replaceChildren(...res.items.map((it) => {
+    renderCxCards();
+  }
+
+  /** Cards of the last Crosshair X scan (Import page). */
+  function renderCxCards() {
+    const items = ui.cx ? ui.cx.items : [];
+    ui.incomplete.cx = missesAssets(() => $('cxList').replaceChildren(...items.map((it) => {
       const extra = it.warnings.length ? el('div', { class: 'shortcut', title: it.warnings.join(', ') }, `Converted with ${it.warnings.length} change${it.warnings.length > 1 ? 's' : ''}`) : null;
       const li = card(it.crosshair, it.name, it.source, false, extra);
       li.addEventListener('click', () => importCx([it]));
       return li;
-    }));
+    })));
   }
 
   async function scanCx() {
@@ -635,13 +669,18 @@
   function applyConfig(cfg, resetDraft) {
     ui.config = cfg;
     const active = activeProfile();
-    const switched = active.id !== ui.draftId;
-    if (resetDraft || switched || !ui.pushTimer) {
+    const reload = resetDraft || active.id !== ui.draftId || !ui.pushTimer;
+    if (reload) {
       ui.draftId = active.id;
       ui.draft = C.sanitizeCrosshair(active.crosshair);
-      ui.designer.load(ui.draft, active.name, resetDraft || switched);
-    } else {
-      ui.designer.redraw();
+    }
+    // a crosshair the designer cannot show must not stop the other pages from rendering
+    try {
+      if (reload) ui.designer.load(ui.draft, active.name, active.id); // undo history follows the profile id
+      else ui.designer.redraw();
+    } catch (err) {
+      console.error('designer could not show the crosshair', err);
+      toast(`The designer could not show "${active.name}"`, true);
     }
     $('enabledToggle').checked = cfg.enabled;
     for (const k of ['launchAtLogin', 'startHidden', 'hideOnLaunch', 'checkUpdates']) $(k).checked = cfg[k];
@@ -695,7 +734,7 @@
     if (page === 'discover' && ui.config) {
       $('discoverCards').replaceChildren(...discoverPicks().map(p => {
         const item = card(p.crosshair, p.name, p.category, false);
-        item.addEventListener('click', () => createProfile(p.name, p.crosshair));
+        item.addEventListener('click', () => createProfile(p.name, p.crosshair, true)); // saved already → equip it
         return item;
       }));
     }
@@ -796,9 +835,7 @@
     window.addEventListener('keydown', onRecordKey, true);
     window.addEventListener('blur', () => ui.recording && stopRecording());
 
-    $('btnCopy').addEventListener('click', async () => {
-      if ((await call('clipboard:write', $('exportCode').value)) !== null) toast('Code copied');
-    });
+    $('btnCopy').addEventListener('click', copyShareCode);
     $('btnPaste').addEventListener('click', async () => {
       const text = await call('clipboard:read');
       if (text != null) $('importCode').value = text;
@@ -814,6 +851,7 @@
       ui.runtime = rt || {};
       renderToggle();
       renderUpdate();
+      renderReadOnly();
     });
     window.cz.on('hotkeys:status', (s) => {
       ui.hotkeyStatus = s || {};
@@ -831,7 +869,15 @@
       },
       onShare: copyShareCode,
       getScale: () => (ui.config ? ui.config.display.scale : 1),
-      onImageLoaded: () => ui.config && renderProfiles(),
+      onImageLoaded: () => {
+        // a decoded image or font can only complete a list whose last render missed one; complete
+        // lists are not rebuilt, so their cards keep focus and clicks and test-firing an svg layer
+        // in the designer (a new image per frame) does not rebuild every card each frame
+        if (!ui.config) return;
+        if (ui.incomplete.saved) renderProfiles();
+        if (ui.incomplete.library) renderPresets();
+        if (ui.incomplete.cx) renderCxCards();
+      },
     });
     wire();
     buildPosition();
@@ -843,6 +889,7 @@
     ui.defaults = res.defaults || {};
     applyConfig(res.config, true);
     renderUpdate();
+    renderReadOnly();
     renderVersion();
     showPage('discover');
     loadMonitors();

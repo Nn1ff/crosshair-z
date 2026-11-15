@@ -132,6 +132,201 @@ test('game presets decode completely and native defaults match', () => {
   for (const c of ['CS2 pros', 'Valorant pros', 'Fortnite pros', 'Rust creators']) assert.ok(cats.has(c), `missing ${c}`);
 });
 
+test('share code length cap', () => {
+  assert.throws(() => core.decodeShareCode('CZ3-' + 'A'.repeat(2000001)), /too long/);
+  // a code of exactly the cap is still read (and rejected only for its content)
+  assert.throws(() => core.decodeShareCode('CZ3-' + 'A'.repeat(core.MAX_SHARE_CODE_CHARS - 4)), /corrupted/);
+});
+
+test('oversized drawing source dropped on decode', () => {
+  const png = (chars) => 'data:image/png;base64,' + 'A'.repeat(chars - 'data:image/png;base64,'.length);
+  const ch = core.sanitizeCrosshair({ version: core.SCHEMA_VERSION, layers: [
+    { kind: 'draw', draw: { src: png(40000) } },
+    { kind: 'draw', draw: { src: png(core.MAX_DRAW_SRC_CHARS) } },
+  ] });
+  assert.strictEqual(ch.layers[0].draw.src.length, 40000, 'kept locally');
+  const decoded = core.decodeShareCode(core.encodeShareCode(ch));
+  assert.strictEqual(decoded.layers[0].kind, 'draw');
+  assert.strictEqual(decoded.layers[0].draw.src, '');
+  assert.strictEqual(decoded.layers[1].draw.src, ch.layers[1].draw.src, 'a source at the cap survives');
+});
+
+test('sanitizeCrosshair tolerates broken shapes', () => {
+  const inputs = [
+    { version: 3 },
+    { layers: {} },
+    { version: 3, layers: {} },
+    { version: 3, layers: 'x' },
+    { layers: [null, 'x'] },
+    { version: 3, layers: [null, 'x', 7, []] },
+    { layers: [{ kind: 'crosshair', outline: null, firing: null }] },
+    { version: 3, layers: [{ outline: null, firing: null, lines: null, dot: null, form: null, text: null, draw: null, image: null }] },
+  ];
+  for (const input of inputs) {
+    const ch = core.sanitizeCrosshair(input);
+    assert.ok(ch.layers.length >= 1, JSON.stringify(input));
+    assert.ok(core.overlaySizePx(ch) > 0, JSON.stringify(input));
+  }
+  const nulls = core.sanitizeCrosshair(inputs[7]).layers[0];
+  assert.deepStrictEqual([nulls.outline, nulls.firing, nulls.lines], [plain(core.DEFAULT_LAYER.outline), plain(core.DEFAULT_LAYER.firing), plain(core.DEFAULT_LAYER.lines)]);
+  assert.deepStrictEqual(core.sanitizeCrosshair(inputs[5]), plain(core.DEFAULT_CROSSHAIR), 'non-object layers dropped');
+});
+
+const CORE_PATH = require.resolve('../src/shared/crosshair-core');
+
+/**
+ * Minimal stand-ins for the browser image APIs (Node has no Image / OffscreenCanvas / animation
+ * frames). Fake images load only when the test calls img.load(); frame callbacks run on demand.
+ * Every call loads its own crosshair-core, so the image cache, listener, pins, miss count and
+ * scratch canvases of one test never reach another.
+ */
+function withFakeBrowser(fn) {
+  const names = ['OffscreenCanvas', 'Image', 'requestAnimationFrame'];
+  const saved = names.map((n) => Object.getOwnPropertyDescriptor(globalThis, n));
+  const images = [];
+  const frames = [];
+  globalThis.OffscreenCanvas = class {
+    constructor(w, h) { this.width = w; this.height = h; }
+    getContext() { return { drawImage() {} }; }
+  };
+  globalThis.Image = class {
+    constructor() { this.complete = false; this.naturalWidth = 0; this.naturalHeight = 0; images.push(this); }
+    load(w = 1, h = 1) { this.complete = true; this.naturalWidth = w; this.naturalHeight = h; this.onload(); }
+  };
+  globalThis.requestAnimationFrame = (cb) => frames.push(cb);
+  const shared = require.cache[CORE_PATH];
+  delete require.cache[CORE_PATH];
+  try {
+    return fn({ core: require(CORE_PATH), images, frames });
+  } finally {
+    if (shared) require.cache[CORE_PATH] = shared;
+    else delete require.cache[CORE_PATH];
+    names.forEach((n, i) => (saved[i] ? Object.defineProperty(globalThis, n, saved[i]) : delete globalThis[n]));
+  }
+}
+
+test('image tests get their own core', () => {
+  let first;
+  withFakeBrowser(({ core: fresh }) => {
+    first = fresh;
+    fresh.primeImage('data:image/png;base64,own', { width: 1, height: 1 });
+    assert.notStrictEqual(fresh, core, 'not the module the other tests share');
+  });
+  withFakeBrowser(({ core: fresh }) => {
+    assert.notStrictEqual(fresh, first, 'a new module per test');
+    assert.strictEqual(fresh.getImage('data:image/png;base64,own'), null, 'nothing cached by an earlier test');
+  });
+  assert.strictEqual(require(CORE_PATH), core, 'the shared module is restored afterwards');
+});
+
+test('image cache is LRU', () => withFakeBrowser(({ core }) => {
+  assert.strictEqual(core.MAX_IMAGE_CACHE, 256);
+  const src = (i) => `data:image/png;base64,lru${i}`;
+  for (let i = 0; i < core.MAX_IMAGE_CACHE; i++) core.primeImage(src(i), { width: 1, height: 1 });
+  assert.ok(core.getImage(src(0)), 'primed image is served (and touched)');
+  core.primeImage(src(core.MAX_IMAGE_CACHE), { width: 1, height: 1 });
+  assert.ok(core.getImage(src(0)), 'recently used image kept');
+  assert.ok(core.getImage(src(core.MAX_IMAGE_CACHE)), 'newest image kept');
+  assert.strictEqual(core.getImage(src(1)), null, 'least recently used image evicted');
+}));
+
+test('image cache keeps a pixel budget', () => withFakeBrowser(({ core }) => {
+  assert.strictEqual(core.MAX_IMAGE_CACHE_PIXELS, 64 * 1024 * 1024);
+  const src = (i) => `data:image/png;base64,px${i}`;
+  const half = { width: 4096, height: core.MAX_IMAGE_CACHE_PIXELS / 4096 / 2 };
+  core.primeImage(src(0), half);
+  core.primeImage(src(1), half);
+  core.primeImage(src(2), { width: 1, height: 1 });
+  assert.ok(core.getImage(src(1)) && core.getImage(src(2)), 'newer images kept');
+  assert.strictEqual(core.getImage(src(0)), null, 'oldest image evicted once the budget is exceeded');
+  core.primeImage(src(3), { width: 10000, height: 10000 });
+  assert.ok(core.getImage(src(3)), 'an image larger than the budget is still served');
+  assert.strictEqual(core.getImage(src(1)), null, 'everything older made room for it');
+}));
+
+test('image loads notify once per frame, only for images still cached', () => withFakeBrowser(({ core, images, frames }) => {
+  let calls = 0;
+  core.onImageLoaded(() => calls++);
+  const src = (i) => `data:image/png;base64,load${i}`;
+  for (let i = 0; i < 3; i++) assert.strictEqual(core.getImage(src(i)), null, 'not decoded yet');
+  images.forEach((img) => img.load());
+  assert.deepStrictEqual([frames.length, calls], [1, 0], 'one frame for three loads');
+  frames.shift()();
+  assert.strictEqual(calls, 1);
+  assert.ok(core.getImage(src(0)), 'decoded image served');
+  core.getImage(src(9));
+  const stale = images[images.length - 1];
+  for (let i = 0; i < core.MAX_IMAGE_CACHE; i++) core.primeImage(`data:image/png;base64,fill${i}`, { width: 1, height: 1 });
+  stale.load();
+  assert.strictEqual(frames.length, 0, 'an image evicted before it loaded does not notify');
+}));
+
+test('a load listener that draws more images than the cache holds settles', () => withFakeBrowser(({ core, images, frames }) => {
+  const srcs = Array.from({ length: core.MAX_IMAGE_CACHE + 44 }, (_, i) => `data:image/png;base64,scan${i}`);
+  assert.ok(srcs.length > 256, 'more images than the cache holds');
+  const drawAll = () => srcs.filter((s) => core.getImage(s)).length;
+  let runs = 0;
+  core.onImageLoaded(() => {
+    runs++;
+    drawAll();
+  });
+  drawAll();
+  for (let frame = 0; frame < 20 && (frames.length || images.some((img) => !img.complete)); frame++) {
+    images.filter((img) => !img.complete).forEach((img) => img.load());
+    while (frames.length) frames.shift()();
+  }
+  assert.ok(runs <= 3, `listener ran ${runs} times (redraw loop)`);
+  assert.strictEqual(drawAll(), srcs.length, 'every image drawn once the loads settle');
+}));
+
+test('image cache counts draws that wait for an image', () => withFakeBrowser(({ core, images }) => {
+  const src = (name) => `data:image/png;base64,${name}`;
+  assert.strictEqual(core.imageCacheMisses(), 0, 'a fresh core has missed nothing');
+  assert.strictEqual(core.getImage(src('slow')), null);
+  assert.strictEqual(core.imageCacheMisses(), 1, 'a request that starts decoding counts');
+  assert.strictEqual(core.getImage(src('slow')), null);
+  assert.strictEqual(core.imageCacheMisses(), 2, 'so does one while it still decodes');
+  images[0].load();
+  assert.ok(core.getImage(src('slow')));
+  core.primeImage(src('primed'), { width: 1, height: 1 });
+  assert.ok(core.getImage(src('primed')));
+  assert.strictEqual(core.imageCacheMisses(), 2, 'decoded and primed images are hits');
+  assert.strictEqual(core.getImage(src('broken')), null);
+  images[1].complete = true; // decoding failed: no load event will ever follow
+  assert.strictEqual(core.getImage(src('broken')), null);
+  assert.strictEqual(core.imageCacheMisses(), 3, 'a failed image is not waited for');
+  assert.strictEqual(core.getImage(''), null);
+  assert.strictEqual(core.imageCacheMisses(), 3, 'no source: nothing to wait for');
+}));
+
+test('layerBounds estimates instead of throwing', () => withFakeBrowser(({ core }) => {
+  const square = (side) => ({ x: -side / 2, y: -side / 2, w: side, h: side });
+  const huge = core.sanitizeCrosshair({ version: core.SCHEMA_VERSION, layers: [{ kind: 'image', scale: 8, image: { size: 512 } }] });
+  const side = core.overlaySizePx(huge, 4);
+  assert.ok(side > core.MAX_BOUNDS_SIDE, 'too large to scan');
+  assert.deepStrictEqual(core.layerBounds(huge, 0, { scale: 4 }), square(side));
+  // a canvas whose pixel read fails (e.g. out of memory)
+  globalThis.OffscreenCanvas = class {
+    constructor(w, h) { this.width = w; this.height = h; }
+    getContext() {
+      const canvas = this;
+      const noop = () => {};
+      return new Proxy({}, { get: (t, k) => (k === 'canvas' ? canvas : k === 'getImageData' ? () => { throw new RangeError('no memory'); } : k in t ? t[k] : noop) });
+    }
+  };
+  const small = core.sanitizeCrosshair(null);
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(' '));
+  try {
+    assert.deepStrictEqual(core.layerBounds(small, 0), square(core.overlaySizePx(small)));
+  } finally {
+    console.warn = warn;
+  }
+  assert.strictEqual(warnings.length, 1, 'the fallback is logged');
+  assert.strictEqual(core.layerBounds(small, 3), null, 'no such layer');
+}));
+
 test('new arm shapes / layer kinds: sanitize, share, overlay size', () => {
   const ch = core.sanitizeCrosshair({ version: core.SCHEMA_VERSION, layers: [
     { lines: { shape: 'arc', count: 6, offset: 20 } },

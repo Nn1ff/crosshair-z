@@ -11,6 +11,8 @@ use tauri::Manager;
 
 /// Tray icon @2x from 150 % primary scale (Electron picked tray@2x by DPI the same way).
 const HIDPI_TRAY_PERCENT: u32 = 150;
+/// Tauri's async work (IPC and sprite job commands) is light: two workers instead of one per core.
+const ASYNC_WORKERS: usize = 2;
 
 fn main() {
     logger::init(&paths::logs_dir());
@@ -35,6 +37,18 @@ fn main() {
         // holding the mutex: any other Crosshair Z exe is a 1.x (Electron) build
         system::stop_legacy_instances();
     }
+
+    // Set before Tauri starts its default runtime; lives until main returns.
+    let _async_runtime = match tokio::runtime::Builder::new_multi_thread().worker_threads(ASYNC_WORKERS).enable_all().build() {
+        Ok(rt) => {
+            tauri::async_runtime::set(rt.handle().clone());
+            Some(rt)
+        }
+        Err(err) => {
+            logger::warn("small async runtime unavailable, using the default one", json!({"error": err.to_string()}));
+            None
+        }
+    };
 
     let (tx, rx) = mpsc::channel::<AppEvent>();
     let app_tx = tx.clone();
@@ -76,7 +90,8 @@ fn main() {
             app.manage(IpcBridge(app_tx.clone()));
             let hello_tx = app_tx.clone();
             instance::listen(Box::new(move |hello| {
-                let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+                // rendezvous: the app's reply only counts (and it only quits) while this waits
+                let (reply_tx, reply_rx) = std::sync::mpsc::sync_channel(0);
                 if hello_tx.send(AppEvent::SecondInstance { hello, reply: reply_tx }).is_err() {
                     return false;
                 }

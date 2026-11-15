@@ -1,11 +1,13 @@
 //! The overlay window: a click-through, topmost, layered popup on its own thread. It only shows
 //! premultiplied BGRA frames handed to it (`UpdateLayeredWindow`), reasserts topmost every
-//! 2 s and whenever the foreground window changes, and reports display changes.
+//! 2 s, whenever the foreground window changes and (throttled) with new frames, and reports
+//! display changes.
 
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 use windows::core::w;
@@ -30,6 +32,8 @@ use crate::logger;
 pub const CLASS_NAME: &str = "CrosshairZOverlay";
 const TOPMOST_TIMER_ID: usize = 1;
 const TOPMOST_REASSERT_MS: u32 = 2000;
+/// Frames arrive in bursts (firing animation); the frame path raises the window at most this often.
+const REASSERT_MIN_INTERVAL: Duration = Duration::from_millis(250);
 const WM_APP_CMD: u32 = WM_APP + 1;
 
 pub enum WindowCmd {
@@ -97,6 +101,8 @@ struct Ctx {
     on_display_change: Box<dyn Fn() + Send>,
     surface: Option<Surface>,
     shown: bool,
+    /// last topmost reassert from any source (frame path, timer, foreground hook)
+    last_raise: Option<Instant>,
 }
 
 thread_local! {
@@ -161,22 +167,35 @@ unsafe fn reassert_topmost(hwnd: HWND) {
     let _ = SetWindowPos(hwnd, Some(HWND_TOP), 0, 0, 0, 0, flags);
 }
 
+/// Reassert topmost and remember when.
+unsafe fn raise(ctx: &mut Ctx, now: Instant) {
+    reassert_topmost(ctx.hwnd);
+    ctx.last_raise = Some(now);
+}
+
+/// The frame path raises the window when it never was, on a size change, and otherwise at most
+/// every `REASSERT_MIN_INTERVAL` (the timer and foreground hook cover the time in between).
+fn should_reassert(last: Option<Instant>, now: Instant, size_changed: bool) -> bool {
+    size_changed || last.is_none_or(|t| now.saturating_duration_since(t) >= REASSERT_MIN_INTERVAL)
+}
+
 unsafe fn show_frame(ctx: &mut Ctx, x: i32, y: i32, size: u32, pixels: &[u32]) {
     if size == 0 || pixels.len() != (size * size) as usize {
         logger::error("overlay frame has wrong size", json!({"size": size, "pixels": pixels.len()}));
         return;
     }
-    if ctx.surface.as_ref().map(|s| s.size) != Some(size) {
+    let size_changed = ctx.surface.as_ref().map(|s| s.size) != Some(size);
+    if size_changed {
         ctx.surface = None;
         ctx.surface = Surface::new(size);
     }
     let Some(s) = ctx.surface.as_ref() else { return };
     std::ptr::copy_nonoverlapping(pixels.as_ptr(), s.bits, pixels.len());
     let blend = BLENDFUNCTION { BlendOp: AC_SRC_OVER as u8, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: AC_SRC_ALPHA as u8 };
-    let screen = GetDC(None);
+    // hdcDst = NULL: the default palette is fine for 32-bit frames, no screen DC per frame
     let result = UpdateLayeredWindow(
         ctx.hwnd,
-        Some(screen),
+        None,
         Some(&POINT { x, y }),
         Some(&SIZE { cx: size as i32, cy: size as i32 }),
         Some(s.dc),
@@ -185,16 +204,20 @@ unsafe fn show_frame(ctx: &mut Ctx, x: i32, y: i32, size: u32, pixels: &[u32]) {
         Some(&blend),
         ULW_ALPHA,
     );
-    ReleaseDC(None, screen);
     if let Err(err) = result {
         logger::error("UpdateLayeredWindow failed", json!({"error": err.to_string(), "x": x, "y": y, "size": size}));
         return;
     }
-    if !ctx.shown {
+    let first_show = !ctx.shown;
+    if first_show {
         let _ = ShowWindow(ctx.hwnd, SW_SHOWNOACTIVATE);
         ctx.shown = true;
     }
-    reassert_topmost(ctx.hwnd);
+    let now = Instant::now();
+    // the timer may have raised the still hidden window just before: the first show raises anyway
+    if first_show || should_reassert(ctx.last_raise, now, size_changed) {
+        raise(ctx, now);
+    }
 }
 
 /// Apply queued commands; only the newest frame matters. Returns false on Quit.
@@ -223,9 +246,9 @@ unsafe fn drain() -> bool {
 
 unsafe extern "system" fn on_foreground(_hook: HWINEVENTHOOK, _event: u32, _hwnd: HWND, _obj: i32, _child: i32, _thread: u32, _time: u32) {
     CTX.with(|cell| {
-        if let Ok(guard) = cell.try_borrow() {
-            if let Some(ctx) = guard.as_ref().filter(|c| c.shown) {
-                reassert_topmost(ctx.hwnd);
+        if let Ok(mut guard) = cell.try_borrow_mut() {
+            if let Some(ctx) = guard.as_mut().filter(|c| c.shown) {
+                raise(ctx, Instant::now());
             }
         }
     });
@@ -235,6 +258,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     match msg {
         WM_TIMER if wparam.0 == TOPMOST_TIMER_ID => {
             reassert_topmost(hwnd);
+            CTX.with(|cell| {
+                if let Ok(mut guard) = cell.try_borrow_mut() {
+                    if let Some(ctx) = guard.as_mut() {
+                        ctx.last_raise = Some(Instant::now());
+                    }
+                }
+            });
             LRESULT(0)
         }
         WM_DISPLAYCHANGE | WM_DPICHANGED => {
@@ -288,7 +318,7 @@ unsafe fn run(rx: Receiver<WindowCmd>, ready: Sender<Result<u32, String>>, on_di
     if hook.is_invalid() {
         logger::warn("foreground hook unavailable, topmost reassert timer only", None);
     }
-    CTX.with(|cell| *cell.borrow_mut() = Some(Ctx { hwnd, rx, on_display_change, surface: None, shown: false }));
+    CTX.with(|cell| *cell.borrow_mut() = Some(Ctx { hwnd, rx, on_display_change, surface: None, shown: false, last_raise: None }));
     let _ = ready.send(Ok(GetCurrentThreadId()));
     logger::info("overlay window ready", None);
 
@@ -312,4 +342,20 @@ unsafe fn run(rx: Receiver<WindowCmd>, ready: Sender<Result<u32, String>>, on_di
     }
     CTX.with(|cell| *cell.borrow_mut() = None);
     logger::info("overlay window closed", None);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reassert_throttle() {
+        let t0 = Instant::now();
+        let ms = Duration::from_millis;
+        assert!(should_reassert(None, t0, false), "first show");
+        assert!(should_reassert(Some(t0), t0 + ms(100), true), "size changed");
+        assert!(!should_reassert(Some(t0), t0 + ms(100), false), "frame burst");
+        assert!(should_reassert(Some(t0), t0 + ms(250), false), "interval passed");
+        assert!(!should_reassert(Some(t0 + ms(10)), t0, false), "clock order never panics");
+    }
 }

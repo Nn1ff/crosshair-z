@@ -10,10 +10,11 @@ use serde::Serialize;
 use serde_json::json;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
-use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS};
+use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_NOREPEAT};
 use windows::Win32::UI::WindowsAndMessaging::{GetMessageW, PeekMessageW, PostThreadMessageW, MSG, PM_NOREMOVE, WM_APP, WM_HOTKEY, WM_USER};
 
 use super::accel;
+use crate::config::MOVE_ACTIONS;
 use crate::logger;
 
 const WM_APP_CMD: u32 = WM_APP + 2;
@@ -83,6 +84,16 @@ impl Drop for Hotkeys {
     }
 }
 
+/// `RegisterHotKey` modifiers for the action `key`: a held key fires once (`MOD_NOREPEAT`),
+/// except for the move actions (`MOVE_ACTIONS`), which nudge the crosshair pixel by pixel.
+fn hotkey_modifiers(key: &str, mods: u32) -> u32 {
+    if MOVE_ACTIONS.contains(&key) {
+        mods
+    } else {
+        mods | MOD_NOREPEAT.0
+    }
+}
+
 unsafe fn register_all(bindings: Vec<(String, String)>, active: &mut HashMap<i32, String>) -> BTreeMap<String, Status> {
     for id in active.keys() {
         let _ = UnregisterHotKey(None, *id);
@@ -103,7 +114,7 @@ unsafe fn register_all(bindings: Vec<(String, String)>, active: &mut HashMap<i32
                 }
                 Ok((mods, vk)) => {
                     let id = i as i32 + 1;
-                    match RegisterHotKey(None, id, HOT_KEY_MODIFIERS(mods), vk) {
+                    match RegisterHotKey(None, id, HOT_KEY_MODIFIERS(hotkey_modifiers(&key, mods)), vk) {
                         Ok(()) => {
                             used.insert(accel_str.clone());
                             active.insert(id, key.clone());
@@ -185,6 +196,17 @@ mod tests {
         assert_eq!(s["prev"], Status::Duplicate);
         assert_eq!(s["settings"], Status::Invalid);
         assert_eq!(s["profile:a"], Status::Ok);
+    }
+
+    #[test]
+    fn move_actions_keep_repeat() {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{MOD_ALT, MOD_NOREPEAT};
+        for key in ["toggle", "next", "prev", "settings", "profile:abc"] {
+            assert_eq!(hotkey_modifiers(key, MOD_ALT.0), MOD_ALT.0 | MOD_NOREPEAT.0, "{key} fires once per press");
+        }
+        for key in ["moveUp", "moveDown", "moveLeft", "moveRight"] {
+            assert_eq!(hotkey_modifiers(key, MOD_ALT.0), MOD_ALT.0, "{key} repeats while held");
+        }
     }
 
     #[test]

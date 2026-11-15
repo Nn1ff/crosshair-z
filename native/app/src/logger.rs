@@ -1,17 +1,23 @@
 //! File logger, port of `src/main/logger.js`: one line per entry
 //! `<ISO-UTC> <LEVEL> <msg>[ <json ctx>]`, single-file rotation to `.1` above 1 MiB.
-//! Never panics: a broken log dir disables file logging (reported once on stderr).
+//! Never panics: when the log file cannot be written, file output pauses for a minute and is
+//! then retried (both reported on stderr).
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{Mutex, OnceLock, PoisonError};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
 const MAX_LOG_BYTES: u64 = 1024 * 1024;
 const LOG_NAME: &str = "crosshair-z.log";
+/// How long file output pauses after a failed write before it is tried again.
+#[cfg(not(test))]
+const FILE_RETRY_AFTER: Duration = Duration::from_secs(60);
+#[cfg(test)]
+const FILE_RETRY_AFTER: Duration = Duration::from_millis(50);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -35,20 +41,21 @@ impl Level {
 /// A log sink bound to one file.
 pub struct Logger {
     file: PathBuf,
-    file_ok: Mutex<bool>,
+    /// Set while file output is paused after a failure; the file is skipped until then.
+    disabled_until: Mutex<Option<Instant>>,
 }
 
 impl Logger {
-    /// Create the log dir if needed. Failure only disables file output.
+    /// Create the log dir if needed. Failure only pauses file output.
     pub fn new(dir: &Path) -> Logger {
-        let ok = match fs::create_dir_all(dir) {
-            Ok(()) => true,
+        let disabled_until = match fs::create_dir_all(dir) {
+            Ok(()) => None,
             Err(err) => {
-                let _ = writeln!(std::io::stderr(), "[logger] cannot create log dir {}: {err}", dir.display());
-                false
+                echo(&format!("[logger] cannot create log dir {}: {err}", dir.display()));
+                Some(Instant::now() + FILE_RETRY_AFTER)
             }
         };
-        Logger { file: dir.join(LOG_NAME), file_ok: Mutex::new(ok) }
+        Logger { file: dir.join(LOG_NAME), disabled_until: Mutex::new(disabled_until) }
     }
 
     pub fn file(&self) -> &Path {
@@ -56,26 +63,46 @@ impl Logger {
     }
 
     pub fn write(&self, level: Level, msg: &str, ctx: Option<&Value>) {
-        let line = format_line(SystemTime::now(), level, msg, ctx);
-        // Console output only matters for dev runs; a closed pipe is ignored (no EPIPE loop).
-        let _ = writeln!(std::io::stderr(), "{line}");
-        let mut ok = match self.file_ok.lock() {
-            Ok(g) => g,
-            Err(poisoned) => poisoned.into_inner(),
+        let now = SystemTime::now();
+        let line = format_line(now, level, msg, ctx);
+        echo(&line);
+        let mut disabled_until = self.disabled_until.lock().unwrap_or_else(PoisonError::into_inner);
+        let resuming = match *disabled_until {
+            Some(until) if Instant::now() < until => return,
+            Some(_) => true,
+            None => false,
         };
-        if !*ok {
-            return;
+        // One write per entry, newline included: appends of several writers never tear a line.
+        let mut entry = String::with_capacity(line.len() + 1);
+        if resuming {
+            entry.push_str(&format_line(now, Level::Info, "file logging resumed", None));
+            entry.push('\n');
+        }
+        entry.push_str(&line);
+        entry.push('\n');
+        match self.append(&entry, resuming) {
+            Ok(()) => {
+                if resuming {
+                    echo("[logger] file logging resumed");
+                }
+                *disabled_until = None;
+            }
+            Err(err) => {
+                *disabled_until = Some(Instant::now() + FILE_RETRY_AFTER);
+                echo(&format!("[logger] write failed, file logging paused for {FILE_RETRY_AFTER:?}: {err}"));
+            }
+        }
+    }
+
+    fn append(&self, entry: &str, resuming: bool) -> std::io::Result<()> {
+        if resuming {
+            // the dir may have been missing or removed when output paused
+            if let Some(dir) = self.file.parent() {
+                fs::create_dir_all(dir)?;
+            }
         }
         self.rotate_if_needed();
-        let result = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.file)
-            .and_then(|mut f| writeln!(f, "{line}"));
-        if let Err(err) = result {
-            *ok = false;
-            let _ = writeln!(std::io::stderr(), "[logger] write failed, file logging disabled: {err}");
-        }
+        OpenOptions::new().create(true).append(true).open(&self.file)?.write_all(entry.as_bytes())
     }
 
     fn rotate_if_needed(&self) {
@@ -83,11 +110,21 @@ impl Logger {
             Ok(meta) if meta.len() > MAX_LOG_BYTES => {
                 let backup = self.file.with_extension("log.1");
                 if let Err(err) = fs::rename(&self.file, &backup) {
-                    let _ = writeln!(std::io::stderr(), "[logger] rotate failed: {err}");
+                    echo(&format!("[logger] rotate failed: {err}"));
                 }
             }
             _ => {}
         }
+    }
+}
+
+/// Console copy of a log line (only seen in dev runs). The app ignores a closed stderr (no EPIPE
+/// loop, no panic); test builds print through `eprintln!` so the harness captures the output.
+fn echo(line: &str) {
+    if cfg!(test) {
+        eprintln!("{line}");
+    } else {
+        let _ = writeln!(std::io::stderr(), "{line}");
     }
 }
 
@@ -146,9 +183,7 @@ pub fn log_file() -> Option<PathBuf> {
 fn emit(level: Level, msg: &str, ctx: Option<Value>) {
     match GLOBAL.get() {
         Some(l) => l.write(level, msg, ctx.as_ref()),
-        None => {
-            let _ = writeln!(std::io::stderr(), "{}", format_line(SystemTime::now(), level, msg, ctx.as_ref()));
-        }
+        None => echo(&format_line(SystemTime::now(), level, msg, ctx.as_ref())),
     }
 }
 
@@ -172,7 +207,6 @@ pub fn error(msg: &str, ctx: impl Into<Option<Value>>) {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::time::Duration;
 
     fn temp_dir(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("cz-logger-{name}-{}", std::process::id()));
@@ -233,5 +267,52 @@ mod tests {
         let log = Logger::new(&dir);
         log.write(Level::Error, "still fine", None);
         let _ = fs::remove_file(&dir);
+    }
+
+    /// `^\d{4}-\d\d-\d\dT`
+    fn starts_with_iso_date(line: &str) -> bool {
+        let b = line.as_bytes();
+        b.len() > 10 && b[..4].iter().all(u8::is_ascii_digit) && b[4] == b'-' && b[5..7].iter().all(u8::is_ascii_digit) && b[7] == b'-' && b[8..10].iter().all(u8::is_ascii_digit) && b[10] == b'T'
+    }
+
+    #[test]
+    fn entries_are_single_writes() {
+        const PER_THREAD: usize = 500;
+        let dir = temp_dir("single");
+        let loggers = [Logger::new(&dir), Logger::new(&dir)];
+        std::thread::scope(|s| {
+            for (t, log) in loggers.iter().enumerate() {
+                s.spawn(move || {
+                    for i in 0..PER_THREAD {
+                        log.write(Level::Info, &format!("thread {t} line {i}"), None);
+                    }
+                });
+            }
+        });
+        let text = fs::read_to_string(loggers[0].file()).unwrap();
+        assert!(text.ends_with('\n'));
+        for line in text.lines() {
+            assert!(starts_with_iso_date(line), "torn entry: {line:?}");
+        }
+        // a write that failed under contention would pause file output and drop entries
+        assert_eq!(text.lines().count(), loggers.len() * PER_THREAD, "every entry written");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn file_logging_resumes_after_pause() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = temp_dir("pause");
+        let log = Logger::new(&dir);
+        let held = OpenOptions::new().append(true).create(true).share_mode(0).open(log.file()).unwrap();
+        log.write(Level::Info, "dropped while held", None);
+        drop(held);
+        std::thread::sleep(Duration::from_millis(80)); // test builds pause file output for 50 ms
+        log.write(Level::Info, "after pause", None);
+        let text = fs::read_to_string(log.file()).unwrap();
+        assert!(text.contains("INFO file logging resumed"), "{text}");
+        assert!(text.ends_with("INFO after pause\n"), "{text}");
+        assert!(!text.contains("dropped while held"), "{text}");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

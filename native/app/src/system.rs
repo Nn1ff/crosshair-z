@@ -13,7 +13,7 @@ use windows::Win32::System::Registry::{RegCloseKey, RegDeleteValueW, RegEnumValu
 use windows::Win32::System::Threading::{GetCurrentProcessId, OpenProcess, TerminateProcess, PROCESS_TERMINATE};
 use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
 
-use crate::logger;
+use crate::{logger, updater};
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 /// Run-key value name of our one autostart entry (= Electron build.appId, so 1.x's entry is reused).
@@ -63,9 +63,39 @@ pub fn mentions_cz_exe(text: &str) -> bool {
     false
 }
 
-/// Run-key names that start some Crosshair Z exe but are not ours (autostart.js `staleEntryNames`).
+/// File names Crosshair Z exes ship under (any case): `Crosshair Z.exe`, `Crosshair Z <x.y.z>.exe`
+/// (in-app updates) and `Crosshair-Z.exe` (release asset).
+pub fn is_cz_exe_name(file_name: &str) -> bool {
+    let name = file_name.to_ascii_lowercase();
+    let Some(stem) = name.strip_suffix(".exe") else { return false };
+    stem == "crosshair z" || stem == "crosshair-z" || stem.strip_prefix("crosshair z ").is_some_and(updater::is_release_version)
+}
+
+/// File name of the program a Run-key command starts: the quoted path, else the text up to the
+/// first `.exe` that ends a word (unquoted paths may contain spaces), else the first word.
+fn run_command_exe_name(command: &str) -> &str {
+    let command = command.trim_start();
+    let path = match command.strip_prefix('"') {
+        Some(quoted) => quoted.split('"').next().unwrap_or(quoted),
+        None => {
+            let unquoted = command.split('"').next().unwrap_or(command);
+            // ASCII lowercasing keeps byte offsets, so `end` indexes `unquoted` too
+            let lower = unquoted.to_ascii_lowercase();
+            let exe_end = lower.match_indices(".exe").map(|(i, _)| i + ".exe".len()).find(|&end| lower[end..].chars().next().is_none_or(char::is_whitespace));
+            match exe_end {
+                Some(end) => &unquoted[..end],
+                None => unquoted.split_whitespace().next().unwrap_or(""),
+            }
+        }
+    };
+    path.rsplit(['\\', '/']).next().unwrap_or(path)
+}
+
+/// Run-key names that start a Crosshair Z exe but are not ours, plus known legacy names
+/// (autostart.js `staleEntryNames`). Only the started exe's file name counts, so other apps and
+/// dev builds whose path merely mentions Crosshair Z keep their entries.
 pub fn stale_entry_names(entries: &[(String, String)], own: &str) -> Vec<String> {
-    let mut out: Vec<String> = entries.iter().filter(|(n, d)| n != own && mentions_cz_exe(d)).map(|(n, _)| n.clone()).collect();
+    let mut out: Vec<String> = entries.iter().filter(|(n, d)| n != own && is_cz_exe_name(run_command_exe_name(d))).map(|(n, _)| n.clone()).collect();
     for legacy in LEGACY_LOGIN_ITEM_NAMES {
         if entries.iter().any(|(n, _)| n == legacy) && !out.iter().any(|n| n == legacy) {
             out.push(legacy.to_string());
@@ -144,26 +174,35 @@ impl Drop for RunKey {
     }
 }
 
-/// Exactly one autostart entry may exist (ours, pointing at `exe`) — or none. Never fails.
-pub fn apply_login_item(enabled: bool, exe: &Path) {
+/// Exactly one autostart entry may exist (ours, pointing at `exe`) — or none. Never fails; returns
+/// true when everything was applied without an error.
+pub fn apply_login_item(enabled: bool, exe: &Path) -> bool {
     let key = match RunKey::open() {
         Ok(k) => k,
         Err(err) => {
             logger::error("autostart: Run key unavailable", json!({"error": err}));
-            return;
+            return false;
         }
     };
+    let mut ok = true;
     for name in stale_entry_names(&key.entries(), LOGIN_ITEM_NAME) {
         match key.delete(&name) {
             Ok(()) => logger::info("removed stale autostart entry", json!({"name": name})),
-            Err(err) => logger::warn("removing stale autostart entry failed", json!({"name": name, "error": err})),
+            Err(err) => {
+                ok = false;
+                logger::warn("removing stale autostart entry failed", json!({"name": name, "error": err}));
+            }
         }
     }
     let result = if enabled { key.set(LOGIN_ITEM_NAME, &login_command(exe)) } else { key.delete(LOGIN_ITEM_NAME) };
     match result {
         Ok(()) => logger::info("login item applied", json!({"openAtLogin": enabled, "path": exe.display().to_string()})),
-        Err(err) => logger::error("login item update failed", json!({"error": err, "path": exe.display().to_string()})),
+        Err(err) => {
+            ok = false;
+            logger::error("login item update failed", json!({"error": err, "path": exe.display().to_string()}));
+        }
     }
+    ok
 }
 
 /// Uninitializes COM on drop (only if this call initialized it).
@@ -306,6 +345,46 @@ mod tests {
             ("electron.app.Crosshair Z".to_string(), "C:\\weird\\path.exe".to_string()),
         ];
         assert_eq!(stale_entry_names(&entries, LOGIN_ITEM_NAME), vec!["Other copy", "electron.app.Crosshair Z"]);
+    }
+
+    #[test]
+    fn cz_exe_names() {
+        for yes in ["Crosshair Z.exe", "Crosshair Z 2.0.5.exe", "crosshair-z.exe", "CROSSHAIR Z 10.20.300.EXE"] {
+            assert!(is_cz_exe_name(yes), "{yes}");
+        }
+        for no in [
+            "CrosshairZoom.exe",
+            "Crosshair-Z-Setup.exe",
+            "crosshair_z-1a2b3c.exe",
+            "Crosshair Z 2.0.exe",
+            "Crosshair Z 2.0.5.1.exe",
+            "Crosshair Z v2.0.5.exe",
+            "Crosshair Z 2.0.5.exe.part",
+            "Crosshair Z",
+            "",
+        ] {
+            assert!(!is_cz_exe_name(no), "{no}");
+        }
+    }
+
+    #[test]
+    fn run_command_exe_names() {
+        assert_eq!(run_command_exe_name("\"C:\\Games\\Crosshair Z.exe\" --hidden"), "Crosshair Z.exe");
+        assert_eq!(run_command_exe_name("C:\\Program Files\\CZ\\Crosshair Z 2.0.5.exe --hidden"), "Crosshair Z 2.0.5.exe");
+        assert_eq!(run_command_exe_name("C:\\my.exe.d\\app.EXE"), "app.EXE");
+        assert_eq!(run_command_exe_name("cmd /c \"C:\\x\\Crosshair Z.exe\""), "cmd");
+        assert_eq!(run_command_exe_name(""), "");
+    }
+
+    #[test]
+    fn stale_entries_only_cz_exes() {
+        let entries = vec![
+            ("Zoom".to_string(), "\"C:\\Tools\\CrosshairZoom.exe\" --tray".to_string()),
+            ("Dev build".to_string(), "C:\\src\\crosshair z\\native\\app\\target\\debug\\deps\\crosshair_z-1a2b3c.exe --hidden".to_string()),
+            ("Old copy".to_string(), "\"D:\\Games\\Crosshair Z 2.0.4.exe\" --hidden".to_string()),
+            ("Unquoted copy".to_string(), "D:\\Games\\Crosshair-Z.exe --hidden".to_string()),
+        ];
+        assert_eq!(stale_entry_names(&entries, LOGIN_ITEM_NAME), vec!["Old copy", "Unquoted copy"]);
     }
 
     #[test]
